@@ -65,7 +65,7 @@ class PowerSpectrumPSF(object):
         self._fwhm_yy = self._rng.normal() * ls / 10
 
     def _get_atm(self, x, y):
-        xs = (x + 1- self._im_cen) * self._scale
+        xs = (x + 1 - self._im_cen) * self._scale
         ys = (y + 1 - self._im_cen) * self._scale
         g1, g2 = self._ps.getShear((xs, ys))
         mu = self._ps.getMagnification((xs, ys))
