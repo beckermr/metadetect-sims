@@ -14,6 +14,12 @@ $ pip install -e .
 
 Then change into the directory with the simulation you would like to run.
 
+### Simulation Scripts
+
+The files in the `sim_utils` directory are copy-pasted to each simulation run
+
+You need to change the dictionary in `config.py` to control the kind of sim.
+
 ### Running at BNL
 
 To run a sim at BNL, you need to make the condor submit scripts via

@@ -1,13 +1,31 @@
-import os
 import sys
 import pickle
-import joblib
-
 import numpy as np
+import joblib
+import logging
 
-from test_sim_utils import Sim, TEST_METADETECT_CONFIG
+from mdetsims import Sim, TEST_METADETECT_CONFIG
 from metadetect.metadetect import Metadetect
 from config import CONFIG
+
+logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+
+try:
+    from mpi4py import MPI
+
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    n_ranks = comm.Get_size()
+    HAVE_MPI = True
+except Exception:
+    n_ranks = 1
+    rank = 0
+    comm = None
+
+    HAVE_MPI = False
+
+
+DO_COMM = False
 
 
 def _meas_shear(res):
@@ -87,14 +105,16 @@ def _run_sim_mdet(seed):
     config = {}
     config.update(TEST_METADETECT_CONFIG)
 
-    rng = np.random.RandomState(seed=seed)
-    mbobs = Sim(rng=rng, g1=0.02, **CONFIG).get_mbobs()
+    rng = np.random.RandomState(seed=seed + 1000000)
+    mbobs = Sim(
+        rng=rng, g1=0.02, **CONFIG).get_mbobs()
     md = Metadetect(config, mbobs, rng)
     md.go()
     pres = _meas_shear(md.result)
 
-    rng = np.random.RandomState(seed=seed)
-    mbobs = Sim(rng=rng, g1=-0.02, **CONFIG).get_mbobs()
+    rng = np.random.RandomState(seed=seed + 1000000)
+    mbobs = Sim(
+        rng=rng, g1=-0.02, **CONFIG).get_mbobs()
     md = Metadetect(config, mbobs, rng)
     md.go()
     mres = _meas_shear(md.result)
@@ -106,23 +126,60 @@ print('running metadetect', flush=True)
 print('config:', CONFIG, flush=True)
 
 n_sims = int(sys.argv[1])
-seed = int(sys.argv[2])
-odir = sys.argv[3]
+offset = rank * n_sims
 
-seeds = np.random.RandomState(seed).randint(
-    low=0,
-    high=2**30,
-    size=n_sims)
-
-sims = [joblib.delayed(_run_sim_mdet)(s) for s in seeds]
+sims = [joblib.delayed(_run_sim_mdet)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
-    verbose=100,
-    n_jobs=1,
-    pre_dispatch='1',
+    verbose=20,
+    n_jobs=-1,
+    pre_dispatch='2*n_jobs',
     max_nbytes=None)(sims)
 
 pres, mres = zip(*outputs)
+
 pres, mres = _cut(pres, mres)
 
-with open(os.path.join(odir, 'data_%05d.pkl' % seed), 'wb') as fp:
-    pickle.dump((pres, mres), fp)
+if comm is not None and DO_COMM:
+    if rank == 0:
+        n_recv = 0
+        while n_recv < n_ranks - 1:
+            status = MPI.Status()
+            data = comm.recv(
+                source=MPI.ANY_SOURCE,
+                tag=MPI.ANY_TAG,
+                status=status)
+            n_recv += 1
+            pres.extend(data[0])
+            mres.extend(data[1])
+    else:
+        comm.send((pres, mres), dest=0, tag=0)
+else:
+    with open('data%d.pkl' % rank, 'wb') as fp:
+        pickle.dump((pres, mres), fp)
+
+if HAVE_MPI:
+    comm.Barrier()
+
+if rank == 0:
+    if not DO_COMM:
+        for i in range(1, n_ranks):
+            with open('data%d.pkl' % i, 'rb') as fp:
+                data = pickle.load(fp)
+                pres.extend(data[0])
+                mres.extend(data[1])
+
+    mn, msd = _fit_m(pres, mres)
+
+    print("""\
+# of sims: {n_sims}
+noise cancel m   : {mn:f} +/- {msd:f}""".format(
+        n_sims=len(pres),
+        mn=mn,
+        msd=msd), flush=True)
+
+    mn, msd = _fit_m_single(pres)
+
+    print("""\
+no noise cancel m: {mn:f} +/- {msd:f}""".format(
+        mn=mn,
+        msd=msd), flush=True)
