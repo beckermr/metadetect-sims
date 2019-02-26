@@ -108,3 +108,4 @@ venv.bak/
 *.fit
 *.pkl
 *.pdf
+*.txt
