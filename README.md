@@ -2,7 +2,7 @@
 
 simulations for the metadetect paper
 
-# Notes for Usage
+## Notes for Usage
 
 This is not a user-friendly place.
 
@@ -14,7 +14,7 @@ $ pip install -e .
 
 Then change into the directory with the simulation you would like to run.
 
-## Running at BNL
+### Running at BNL
 
 To run a sim at BNL, you need to make the condor submit scripts via
 
