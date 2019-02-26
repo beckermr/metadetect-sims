@@ -5,7 +5,7 @@ import joblib
 
 import numpy as np
 
-from test_sim_utils import Sim, TEST_METADETECT_CONFIG
+from mdetsims import Sim, TEST_METADETECT_CONFIG
 from metadetect.metadetect import Metadetect
 from config import CONFIG
 
