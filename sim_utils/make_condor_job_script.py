@@ -34,18 +34,20 @@ Image_Size       =  1000000
 
 """
 
+N_PATCHES_PER_JOB = 50
+
 
 def _append_job(fp, num, output_dir):
     fp.write("""\
 +job_name = "sim-{num:05d}"
-Arguments = 200 {num} {output_dir}
+Arguments = {n_patches} {num} {output_dir}
 Queue
 
-""".format(num=num, output_dir=output_dir))
+""".format(n_patches=N_PATCHES_PER_JOB, num=num, output_dir=output_dir))
 
 
 n_patches = 10_000_000
-n_jobs = n_patches // 200
+n_jobs = n_patches // N_PATCHES_PER_JOB
 n_jobs_per_script = 500
 n_scripts = n_jobs // 500
 
