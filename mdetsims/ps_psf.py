@@ -3,11 +3,32 @@ import galsim
 
 
 class PowerSpectrumPSF(object):
-    def __init__(self, rng, im_width, scale, trunc=10):
+    """Produce a spatially varying Moffat PSF according to the power spectrum
+    given by Heymans et al. (2012).
+
+    Parameters
+    ----------
+    rng : np.random.RandomState
+        An RNG instance.
+    im_width : float
+        Th width of the image in pixels.
+    scale : float
+        The pixel scale of the image
+    trunc : float
+        The truncation scale for the shape/magnification power spectrum
+        used to generate the PSF variation.
+
+    Methods
+    -------
+    getPSF(pos)
+        Get a PSF model at a given position.
+    """
+    def __init__(self, *, rng, im_width, scale, trunc=10):
         self._rng = rng
         self._x_scale = 2.0 / im_width / scale
         self._im_cen = (im_width - 1)/2
         self._scale = scale
+        self._im_width = im_width
 
         # set the power spectrum and PSF params
         # Heymans et al, 2012 found L0 ~= 3 arcmin, given as 180 arcsec here.
@@ -18,6 +39,8 @@ class PowerSpectrumPSF(object):
             b_power_function=_pf)
         ng = 64
         gs = max(im_width * self._scale / ng, 1)
+        self.ng = ng
+        self.gs = gs
         self._ps.buildGrid(
             grid_spacing=gs,
             ngrid=ng,
@@ -34,22 +57,21 @@ class PowerSpectrumPSF(object):
         lm, ls = _getlogmnsigma(0.9, 0.1)
         self._fwhm_central = np.exp(self._rng.normal() * ls + lm)
 
-        ls = 0.001
-        lm = 0.02 / 5 * 10 / trunc
-        self._fwhm_x = self._rng.normal() * ls + lm
-        self._fwhm_y = self._rng.normal() * ls + lm
-        self._fwhm_xx = self._rng.normal() * ls + lm / 10
-        self._fwhm_xy = self._rng.normal() * ls + lm / 10
-        self._fwhm_yy = self._rng.normal() * ls + lm / 10
+        ls = 0.005
+        self._fwhm_x = self._rng.normal() * ls
+        self._fwhm_y = self._rng.normal() * ls
+        self._fwhm_xx = self._rng.normal() * ls / 10
+        self._fwhm_xy = self._rng.normal() * ls / 10
+        self._fwhm_yy = self._rng.normal() * ls / 10
 
     def _get_atm(self, x, y):
-        xs = (x - 1 - self._im_cen)
-        ys = (y - 1 - self._im_cen)
+        xs = (x + 1- self._im_cen) * self._scale
+        ys = (y + 1 - self._im_cen) * self._scale
         g1, g2 = self._ps.getShear((xs, ys))
         mu = self._ps.getMagnification((xs, ys))
 
-        xs *= self._x_scale
-        ys *= self._x_scale
+        xs = (x - self._im_cen) * self._x_scale
+        ys = (y - self._im_cen) * self._x_scale
         fwhm = (
             self._fwhm_central +
             xs * self._fwhm_x +
@@ -65,4 +87,17 @@ class PowerSpectrumPSF(object):
         return psf
 
     def getPSF(self, pos):
+        """Get a PSF model at a given position.
+
+        Parameters
+        ----------
+        pos : galsim.PositionD
+            The position at which to compute the PSF. In zero-indexed
+            pixel coordinates.
+
+        Returns
+        -------
+        psf : galsim.GSObject
+            A representation of the PSF as a galism object.
+        """
         return self._get_atm(pos.x, pos.y)
