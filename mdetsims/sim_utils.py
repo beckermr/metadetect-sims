@@ -183,7 +183,7 @@ class Sim(dict):
         return obj
 
     def _get_gal_ground_galsim_parametric(self):
-        if not hasattr(self._cosmo_cat):
+        if not hasattr(self, '_cosmo_cat'):
             self._cosmo_cat = galsim.COSMOSCatalog(sample='23.5')
         # set the flux
         tel_diam = 4
