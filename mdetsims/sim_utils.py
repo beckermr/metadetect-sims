@@ -40,6 +40,9 @@ class Sim(dict):
         self.nobj_per_10k = nobj_per_10k
         self.im_cen = (dim - 1) / 2
 
+        self._galsim_rng = galsim.BaseDeviate(
+            seed=self.rng.randint(low=1, high=2**32-1))
+
         # hard coded to the coadd DES value
         self.pixelscale = 0.263
         self.wcs = galsim.PixelScale(self.pixelscale)
@@ -156,6 +159,26 @@ class Sim(dict):
 
         return obj
 
+    def _get_gal_ground_galsim_parametric(self):
+        if not hasattr(self._cosmo_cat):
+            self._cosmo_cat = galsim.COSMOSCatalog(sample='23.5')
+        # set the flux
+        tel_diam = 4
+        exp_time = 90
+        ap_fac = tel_diam**2 / (2.4**2*(1.-0.33**2))
+
+        angle = self.rng.uniform() * 360
+        gal = self._cosmo_cat.makeGalaxy(
+            gal_type='parametric',
+            rng=self._galsim_rng
+        ).rotate(
+            angle * galsim.degrees
+        ).withScaledFlux(
+            # correct fluxes for a ground-like exposure
+            ap_fac * exp_time
+        )
+        return gal
+
     def _get_band_objects(self):
         """Get a list of effective PSF-convolved galsim images w/ their
         offsets in the image.
@@ -176,6 +199,8 @@ class Sim(dict):
             # get the galaxy
             if self.gal_type == 'exp':
                 gal = self._get_gal_exp()
+            elif self.gal_type == 'ground_galsim_parametric':
+                gal = self._get_gal_ground_galsim_parametric()
             else:
                 raise ValueError('gal_type "%s" not valid!' % self.gal_type)
 
