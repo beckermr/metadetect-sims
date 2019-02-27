@@ -5,6 +5,37 @@ import numpy as np
 import joblib
 
 
+def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
+    op = res['1p']
+    q = (
+        (op['flags'] == 0) &
+        (op['wmom_s2n'] > s2n_cut) &
+        (op['wmom_T_ratio'] > trat_cut))
+    if not np.any(q):
+        return None
+    g1p = op['wmom_g'][q, 0]
+
+    om = res['1m']
+    q = (
+        (om['flags'] == 0) &
+        (om['wmom_s2n'] > s2n_cut) &
+        (om['wmom_T_ratio'] > trat_cut))
+    if not np.any(q):
+        return None
+    g1m = om['wmom_g'][q, 0]
+
+    o = res['noshear']
+    q = (
+        (o['flags'] == 0) &
+        (o['wmom_s2n'] > s2n_cut) &
+        (o['wmom_T_ratio'] > trat_cut))
+    if not np.any(q):
+        return None
+    g1 = o['wmom_g'][q, 0]
+
+    return np.mean(g1p), np.mean(g1m), np.mean(g1)
+
+
 def _cut(prr, mrr):
     prr_keep = []
     mrr_keep = []
@@ -34,7 +65,7 @@ def _fit_m(prr, mrr):
 
     rng = np.random.RandomState(seed=100)
     mvals = []
-    for _ in tqdm.trange(1000):
+    for _ in tqdm.trange(1000, leave=False):
         ind = rng.choice(len(y), replace=True, size=len(y))
         mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
 
@@ -49,7 +80,7 @@ def _fit_m_single(prr):
 
     rng = np.random.RandomState(seed=100)
     mvals = []
-    for _ in tqdm.trange(1000):
+    for _ in tqdm.trange(1000, leave=False):
         ind = rng.choice(len(y), replace=True, size=len(y))
         mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
 
@@ -60,9 +91,22 @@ def _func(fname):
     try:
         with open(fname, 'rb') as fp:
             data = pickle.load(fp)
-        return data
+            data_10 = []
+            data_15 = []
+            data_20 = []
+            for pres, mres in data:
+                data_10.append((
+                    _meas_shear(pres, s2n_cut=10),
+                    _meas_shear(mres, s2n_cut=10)))
+                data_15.append((
+                    _meas_shear(pres, s2n_cut=15),
+                    _meas_shear(mres, s2n_cut=15)))
+                data_20.append((
+                    _meas_shear(pres, s2n_cut=20),
+                    _meas_shear(mres, s2n_cut=20)))
+        return [data_10, data_15, data_20]
     except Exception:
-        return (None, None)
+        return [], [], []
 
 
 tmpdir = 'outputs'
@@ -77,29 +121,26 @@ outputs = joblib.Parallel(
     pre_dispatch='2*n_jobs',
     max_nbytes=None)(io)
 
-pres, mres = zip(*outputs)
+for i, s2n in enumerate([10, 15, 20]):
+    _outputs = []
+    for o in outputs:
+        _outputs.extend(o[i])
+    pres, mres = zip(*_outputs)
 
-pres, mres = _cut(pres, mres)
-mn, msd = _fit_m(pres, mres)
+    pres, mres = _cut(pres, mres)
+    mn, msd = _fit_m(pres, mres)
 
-kind = 'mdet'
+    print('s2n:', s2n)
+    print("""\
+    # of sims: {n_sims}
+    m       : {mn:f} +/- {msd:f}""".format(
+        n_sims=len(pres),
+        mn=mn,
+        msd=msd), flush=True)
 
-print("""\
-# of sims: {n_sims}
-run: {kind}
-m: {mn:f} +/- {msd:f}""".format(
-    n_sims=len(pres),
-    kind=kind,
-    mn=mn,
-    msd=msd), flush=True)
+    mn, msd = _fit_m_single(pres)
 
-mn, msd = _fit_m_single(pres)
-
-print("""\
-# of sims: {n_sims}
-run: {kind}
-m: {mn:f} +/- {msd:f}""".format(
-    n_sims=len(pres),
-    kind=kind,
-    mn=mn,
-    msd=msd), flush=True)
+    print("""\
+    m single: {mn:f} +/- {msd:f}""".format(
+        mn=mn,
+        msd=msd), flush=True)
