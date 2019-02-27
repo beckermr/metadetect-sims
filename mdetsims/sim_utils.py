@@ -66,25 +66,16 @@ class Sim(dict):
         -------
         mbobs : MultiBandObsList
         """
-        all_band_obj, offsets = self._get_band_objects()
+        all_band_obj = self._get_band_objects()
 
         mbobs = ngmix.MultiBandObsList()
 
-        band_objects = [o[0] for o in all_band_obj]
-
-        # render objects in loop and sum into final image
-        im = galsim.ImageD(
-            ncol=self.dim,
-            nrow=self.dim,
-            wcs=self.wcs)
-        for obj, offset in zip(band_objects, offsets):
-            obj.drawImage(
-                image=im,
-                offset=offset,
-                add_to_image=True,
-                method='no_pixel',
-            )
-        im = im.array.copy()
+        band_objects = galsim.Sum([o[0] for o in all_band_obj])
+        im = band_objects.drawImage(
+            nx=self.dim,
+            ny=self.dim,
+            wcs=self.wcs,
+            method='no_pixel').array
 
         im += self.rng.normal(scale=self.noise, size=im.shape)
         wt = im*0 + 1.0/self.noise**2
@@ -177,7 +168,6 @@ class Sim(dict):
             A list of galsim positions for each object.
         """
         all_band_obj = []
-        offsets = []
 
         for i in range(self.nobj):
             # unsheared offset from center of image
@@ -194,15 +184,14 @@ class Sim(dict):
                 shear_mat = galsim.Shear(
                     g1=self.g1, g2=self.g2).getMatrix()
                 sdx, sdy = np.dot(
-                    shear_mat, np.array([dx, dy]) / self.pixelscale)
+                    shear_mat, np.array([dx, dy]))
             else:
-                sdx = dx / self.pixelscale
-                sdy = dy / self.pixelscale
+                sdx = dx
+                sdy = dy
 
-            offset = galsim.PositionD(x=sdx, y=sdy)
             psf_pos = galsim.PositionD(
-                x=sdx + self.im_cen, y=sdy + self.im_cen)
-            offsets.append(offset)
+                x=sdx / self.pixelscale + self.im_cen,
+                y=sdy / self.pixelscale + self.im_cen)
 
             # get the PSF info
             _psf_image, _psf_wcs, _ = self._render_psf_image(
@@ -210,8 +199,12 @@ class Sim(dict):
             _psf = galsim.InterpolatedImage(
                 galsim.ImageD(_psf_image), wcs=_psf_wcs)
 
+            # these two operations need to be in this order
             # shear the galaxy
             gal = gal.shear(g1=self.g1, g2=self.g2)
+
+            # shift the galaxy
+            gal = gal.shift(dx=sdx, dy=sdy)
 
             # finally convolve
             band_objs = [
@@ -220,7 +213,7 @@ class Sim(dict):
 
             all_band_obj.append(band_objs)
 
-        return all_band_obj, offsets
+        return all_band_obj
 
     def _render_psf_image(self, *, x, y):
         """Render the PSF image.
@@ -242,19 +235,11 @@ class Sim(dict):
         else:
             raise ValueError('psf_type "%s" not valid!' % self.psf_type)
 
-        noise = np.std(np.concatenate([psf[:, 0].ravel(), psf[0, -1].ravel()]))
-
         # set the signal to noise to about 500
         target_s2n = 500.0
         target_noise = np.sqrt(np.sum(psf ** 2) / target_s2n**2)
-        if target_noise >= noise:
-            psf += self.rng.normal(size=psf.shape) * np.sqrt(
-                target_noise**2 - noise**2)
-            noise = target_noise
 
-        LOGGER.debug('PSF s2n: %s', np.sqrt(np.sum(psf ** 2) / noise / noise))
-
-        return psf, _psf_wcs, noise
+        return psf, _psf_wcs, target_noise
 
     def get_psf_obs(self, *, x, y):
         """Get an ngmix Observation of the PSF at a position.
