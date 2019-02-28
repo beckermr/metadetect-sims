@@ -66,19 +66,25 @@ class Sim(dict):
         -------
         mbobs : MultiBandObsList
         """
-        all_band_obj = self._get_band_objects()
+        all_band_obj, offsets = self._get_band_objects()
 
         mbobs = ngmix.MultiBandObsList()
 
         _, _, _, _, method = self._render_psf_image(
             x=self.im_cen, y=self.im_cen)
 
-        band_objects = galsim.Sum([o[0] for o in all_band_obj])
-        im = band_objects.drawImage(
-            nx=self.dim,
-            ny=self.dim,
-            wcs=self.wcs,
-            method=method).array
+        band_objects = [o[0] for o in all_band_obj]
+        im = galsim.ImageD(
+            ncol=self.dim,
+            nrow=self.dim,
+            wcs=self.wcs)
+        for obj, offset in zip(band_objects, offsets):
+            obj.drawImage(
+                image=im,
+                offset=offset,
+                add_to_image=True,
+                method=method)
+        im = im.array.copy()
 
         im += self.rng.normal(scale=self.noise, size=im.shape)
         wt = im*0 + 1.0/self.noise**2
@@ -171,6 +177,7 @@ class Sim(dict):
             A list of galsim positions for each object.
         """
         all_band_obj = []
+        offsets = []
 
         for i in range(self.nobj):
             # unsheared offset from center of image
@@ -195,17 +202,16 @@ class Sim(dict):
             psf_pos = galsim.PositionD(
                 x=sdx / self.pixelscale + self.im_cen,
                 y=sdy / self.pixelscale + self.im_cen)
+            offsets.append(galsim.PositionD(
+                x=sdx / self.pixelscale,
+                y=sdy / self.pixelscale))
 
             # get the PSF info
             _, _psf_wcs, _, _psf, _ = self._render_psf_image(
                 x=psf_pos.x, y=psf_pos.y)
 
-            # these two operations need to be in this order
             # shear the galaxy
             gal = gal.shear(g1=self.g1, g2=self.g2)
-
-            # shift the galaxy
-            gal = gal.shift(dx=sdx, dy=sdy)
 
             # finally convolve
             band_objs = [
@@ -214,7 +220,7 @@ class Sim(dict):
 
             all_band_obj.append(band_objs)
 
-        return all_band_obj
+        return all_band_obj, offsets
 
     def _render_psf_image(self, *, x, y):
         """Render the PSF image.
