@@ -70,12 +70,15 @@ class Sim(dict):
 
         mbobs = ngmix.MultiBandObsList()
 
+        _, _, _, _, method = self._render_psf_image(
+            x=self.im_cen, y=self.im_cen)
+
         band_objects = galsim.Sum([o[0] for o in all_band_obj])
         im = band_objects.drawImage(
             nx=self.dim,
             ny=self.dim,
             wcs=self.wcs,
-            method='no_pixel').array
+            method=method).array
 
         im += self.rng.normal(scale=self.noise, size=im.shape)
         wt = im*0 + 1.0/self.noise**2
@@ -194,10 +197,8 @@ class Sim(dict):
                 y=sdy / self.pixelscale + self.im_cen)
 
             # get the PSF info
-            _psf_image, _psf_wcs, _ = self._render_psf_image(
+            _, _psf_wcs, _, _psf, _ = self._render_psf_image(
                 x=psf_pos.x, y=psf_pos.y)
-            _psf = galsim.InterpolatedImage(
-                galsim.ImageD(_psf_image), wcs=_psf_wcs)
 
             # these two operations need to be in this order
             # shear the galaxy
@@ -226,20 +227,25 @@ class Sim(dict):
             The WCS as a local Jacobian at the PSF center.
         noise : float
             An estimate of the noise in the image.
+        psf_gs : galsim.GSObject
+            The PSF as a galsim object.
+        method : str
+            Method to use to render images using this PSF.
         """
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
         if self.psf_type == 'gauss':
             psf = galsim.Gaussian(fwhm=0.9)
-            psf = psf.drawImage(nx=33, ny=33, wcs=_psf_wcs).array
+            psf_im = psf.drawImage(nx=33, ny=33, wcs=_psf_wcs).array
+            method = 'auto'
         else:
             raise ValueError('psf_type "%s" not valid!' % self.psf_type)
 
         # set the signal to noise to about 500
         target_s2n = 500.0
-        target_noise = np.sqrt(np.sum(psf ** 2) / target_s2n**2)
+        target_noise = np.sqrt(np.sum(psf_im ** 2) / target_s2n**2)
 
-        return psf, _psf_wcs, target_noise
+        return psf_im, _psf_wcs, target_noise, psf, method
 
     def get_psf_obs(self, *, x, y):
         """Get an ngmix Observation of the PSF at a position.
@@ -256,7 +262,7 @@ class Sim(dict):
         psf_obs : ngmix.Observation
             An Observation of the PSF.
         """
-        psf_image, psf_wcs, noise = self._render_psf_image(x=x, y=y)
+        psf_image, psf_wcs, noise, _ = self._render_psf_image(x=x, y=y)
 
         weight = np.zeros_like(psf_image) + 1.0/noise**2
 
