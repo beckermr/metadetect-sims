@@ -262,7 +262,7 @@ class Sim(dict):
         psf_obs : ngmix.Observation
             An Observation of the PSF.
         """
-        psf_image, psf_wcs, noise, _ = self._render_psf_image(x=x, y=y)
+        psf_image, psf_wcs, noise, _, _ = self._render_psf_image(x=x, y=y)
 
         weight = np.zeros_like(psf_image) + 1.0/noise**2
 
