@@ -142,9 +142,9 @@ class Sim(dict):
             size=2)
 
     def _get_gal_exp(self):
-        flux = 10**(0.4 * (30 - 23))
-        eta1, eta2 = self.rng.normal(size=2) * 0.4
-        half_light_radius = self.rng.uniform() * 0.3 + 0.1
+        flux = 10**(0.4 * (30 - 20))
+        eta1, eta2 = self.rng.normal(size=2) * 0.0
+        half_light_radius = 0.5  # self.rng.uniform() * 0.3 + 0.1
 
         obj = galsim.Sersic(
             half_light_radius=half_light_radius,

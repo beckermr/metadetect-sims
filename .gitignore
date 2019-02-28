@@ -109,3 +109,5 @@ venv.bak/
 *.pkl
 *.pdf
 *.txt
+*.desc
+*.desc.submitted
