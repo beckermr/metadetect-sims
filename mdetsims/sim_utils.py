@@ -59,6 +59,9 @@ class Sim(dict):
             self.dim * self.dim / 1e8 * self.nobj_per_10k *
             frac * frac)
 
+        self.shear_mat = np.linalg.inv(galsim.Shear(
+            g1=self.g1, g2=self.g2).getMatrix())
+
     def get_mbobs(self):
         """Make a simulated MultiBandObsList for metadetect.
 
@@ -152,15 +155,11 @@ class Sim(dict):
 
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 20))
-        eta1, eta2 = self.rng.normal(size=2) * 0.0
-        half_light_radius = 0.25  # self.rng.uniform() * 0.3 + 0.1
+        half_light_radius = 0.25
 
         obj = galsim.Sersic(
             half_light_radius=half_light_radius,
             n=1,
-        ).shear(
-            eta1=eta1,
-            eta2=eta2
         ).withFlux(flux)
 
         return obj
@@ -191,10 +190,7 @@ class Sim(dict):
 
             # compute the final image position
             if self.shear_scene:
-                shear_mat = galsim.Shear(
-                    g1=self.g1, g2=self.g2).getMatrix()
-                sdx, sdy = np.dot(
-                    shear_mat, np.array([dx, dy]))
+                sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
             else:
                 sdx = dx
                 sdy = dy
