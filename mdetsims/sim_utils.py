@@ -171,7 +171,7 @@ class Sim(dict):
 
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 20))
-        half_light_radius = 0.25
+        half_light_radius = 0.5
 
         obj = galsim.Sersic(
             half_light_radius=half_light_radius,
