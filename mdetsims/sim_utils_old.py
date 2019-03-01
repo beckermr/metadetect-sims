@@ -73,20 +73,37 @@ class Sim(dict):
 
         mbobs = ngmix.MultiBandObsList()
 
-        _, _, _, _psf, method = self._render_psf_image(
+        _, _, _, _, method = self._render_psf_image(
             x=self.im_cen, y=self.im_cen)
 
-        band_objects = galsim.Sum(
-            [o[0] for o in all_band_obj]
-        ).shear(
-            g1=self.g1, g2=self.g2)
-        band_objects = galsim.Convolve(band_objects, _psf)
+        im = np.zeros((self.dim, self.dim), dtype='f8')
 
-        im = band_objects.drawImage(
-            nx=self.dim,
-            ny=self.dim,
-            method=method,
-            wcs=self.wcs).array.copy()
+        band_objects = [o[0] for o in all_band_obj]
+        for obj, pos in zip(band_objects, positions):
+            # draw with setup_only to get the image size
+            _im = obj.drawImage(
+                wcs=self.wcs,
+                method=method,
+                setup_only=True).array
+            assert _im.shape[0] == _im.shape[1]
+
+            # now get location of the stamp
+            x_ll = int(pos.x - (_im.shape[1] - 1)/2)
+            y_ll = int(pos.y - (_im.shape[0] - 1)/2)
+            assert x_ll >= 0 and x_ll < self.dim - _im.shape[1]
+            assert y_ll >= 0 and y_ll < self.dim - _im.shape[0]
+            dx = pos.x - (x_ll + (_im.shape[1] - 1)/2)
+            dy = pos.y - (y_ll + (_im.shape[0] - 1)/2)
+            dx *= self.pixelscale
+            dy *= self.pixelscale
+            stamp = obj.shift(dx=dx, dy=dy).drawImage(
+                nx=_im.shape[1],
+                ny=_im.shape[0],
+                wcs=self.wcs,
+                method=method)
+
+            im[y_ll:y_ll+stamp.array.shape[0],
+               x_ll:x_ll+stamp.array.shape[1]] += stamp.array
 
         im += self.rng.normal(scale=self.noise, size=im.shape)
         wt = im*0 + 1.0/self.noise**2
@@ -187,11 +204,27 @@ class Sim(dict):
             else:
                 raise ValueError('gal_type "%s" not valid!' % self.gal_type)
 
-            sdx = dx
-            sdy = dy
-            gal = gal.shift(dx=sdx, dy=sdy)
+            # compute the final image position
+            if self.shear_scene:
+                sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
+            else:
+                sdx = dx
+                sdy = dy
+
+            pos = galsim.PositionD(
+                x=sdx / self.pixelscale + self.im_cen,
+                y=sdy / self.pixelscale + self.im_cen)
+
+            # get the PSF info
+            _, _psf_wcs, _, _psf, _ = self._render_psf_image(
+                x=pos.x, y=pos.y)
+
+            # shear, shift, and then convolve the galaxy
+            gal = gal.shear(g1=self.g1, g2=self.g2)
+            gal = galsim.Convolve(gal, _psf)
 
             all_band_obj.append([gal])
+            positions.append(pos)
 
         return all_band_obj, positions
 
