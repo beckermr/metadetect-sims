@@ -78,7 +78,7 @@ class Sim(dict):
         _, _, _, _, method = self._render_psf_image(
             x=self.im_cen, y=self.im_cen)
 
-        im = np.zeros((self.dim, self.dim), dtype='f8')
+        im = galsim.ImageD(nrow=self.dim, ncol=self.dim, xmin=0, ymin=0)
 
         band_objects = [o[0] for o in all_band_obj]
         for obj, pos in zip(band_objects, positions):
@@ -92,20 +92,26 @@ class Sim(dict):
             # now get location of the stamp
             x_ll = int(pos.x - (_im.shape[1] - 1)/2)
             y_ll = int(pos.y - (_im.shape[0] - 1)/2)
-            assert x_ll >= 0 and x_ll < self.dim - _im.shape[1]
-            assert y_ll >= 0 and y_ll < self.dim - _im.shape[0]
+
+            # get the offset of the center
             dx = pos.x - (x_ll + (_im.shape[1] - 1)/2)
             dy = pos.y - (y_ll + (_im.shape[0] - 1)/2)
             dx *= self.pixelscale
             dy *= self.pixelscale
+
+            # draw and set the proper origin
             stamp = obj.shift(dx=dx, dy=dy).drawImage(
                 nx=_im.shape[1],
                 ny=_im.shape[0],
                 wcs=self.wcs,
                 method=method)
+            stamp.setOrigin(x_ll, y_ll)
 
-            im[y_ll:y_ll+stamp.array.shape[0],
-               x_ll:x_ll+stamp.array.shape[1]] += stamp.array
+            # intersect and add to total image
+            overlap = stamp.bounds & im.bounds
+            im[overlap] += stamp[overlap]
+
+        im = im.array.copy()
 
         im += self.rng.normal(scale=self.noise, size=im.shape)
         wt = im*0 + 1.0/self.noise**2
