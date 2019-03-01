@@ -88,9 +88,11 @@ class Sim(dict):
             assert _im.shape[0] == _im.shape[1]
 
             # now get location of the stamp
-            x_ll = int(pos.x - (_im.shape[0] - 1)/2)
+            x_ll = int(pos.x - (_im.shape[1] - 1)/2)
             y_ll = int(pos.y - (_im.shape[0] - 1)/2)
-            dx = pos.x - (x_ll + (_im.shape[0] - 1)/2)
+            assert x_ll >= 0 and x_ll < self.dim - _im.shape[1]
+            assert y_ll >= 0 and y_ll < self.dim - _im.shape[0]
+            dx = pos.x - (x_ll + (_im.shape[1] - 1)/2)
             dy = pos.y - (y_ll + (_im.shape[0] - 1)/2)
             dx *= self.pixelscale
             dy *= self.pixelscale
