@@ -81,8 +81,8 @@ class Sim(dict):
         self._galsim_rng = galsim.BaseDeviate(
             seed=self.rng.randint(low=1, high=2**32-1))
 
-        # hard coded to the coadd DES value
-        self.pixelscale = 0.263
+        # typical pixel scale
+        self.pixelscale = 0.25
         self.wcs = galsim.PixelScale(self.pixelscale)
 
         # frac of a single dimension that is used for drawing objects
