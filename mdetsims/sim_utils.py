@@ -14,19 +14,57 @@ class Sim(dict):
 
     Parameters
     ----------
+    rng : np.random.RandomState
+        An RNG to use for drawing the objects.
+    gal_type : str
+        The kind of galaxy to simulate.
+    psf_type : str
+        The kind of PSF to simulate.
+    shear_scene : bool
+        Whether or not to shear the full scene.
+    n_coadd : int
+        The number of single epoch images in a coadd. This number is used to
+        scale the noise.
+    g1 : float
+        The simulated shear for the 1-axis.
+    g2 : float
+        The simulated shear for the 2-axis.
+    dim : int
+        The total dimension of the image.
+    buff : int
+        The width of the buffer region.
+    noise : float
+        The noise for a single epoch image.
+    ngal : float
+        The number of objects to simulate per arcminute.
 
     Methods
     -------
+    get_mbobs()
+        Make a simulated MultiBandObsList for metadetect.
+    get_psf_obs(*, x, y):
+        Get an ngmix Observation of the PSF at the position (x, y).
+
+    Notes
+    -----
+    The valid kinds of galaxies are
+
+        'exp' : Sersic objects at very high s/n with n = 1
+        'ground_galsim_parametric' : a typical ground-based sample
+
+    The valid kinds of PSFs are
+
+        'gauss' : a FWHM 0.9 arcsecond Gaussian
     """
     def __init__(
             self, *,
             rng, gal_type, psf_type,
             shear_scene=True,
-            n_coadd=10,
+            n_coadd=1,
             g1=0.02, g2=0.0,
             dim=225, buff=25,
-            noise=4.0,
-            nobj_per_10k=80000):
+            noise=8.0,
+            ngal=45.0):
         self.rng = rng
         self.gal_type = gal_type
         self.psf_type = psf_type
@@ -37,8 +75,11 @@ class Sim(dict):
         self.dim = dim
         self.buff = buff
         self.noise = noise / np.sqrt(self.n_coadd)
-        self.nobj_per_10k = nobj_per_10k
+        self.ngal = ngal
         self.im_cen = (dim - 1) / 2
+
+        self._galsim_rng = galsim.BaseDeviate(
+            seed=self.rng.randint(low=1, high=2**32-1))
 
         # hard coded to the coadd DES value
         self.pixelscale = 0.263
@@ -56,8 +97,8 @@ class Sim(dict):
         # so the number of things we want is
         # dims[0] * dims[1] / 1e4^2 * 80000 * frac * frac
         self.nobj = int(
-            self.dim * self.dim / 1e8 * self.nobj_per_10k *
-            frac * frac)
+            self.ngal *
+            (self.dim * self.pixelscale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
 
@@ -75,7 +116,7 @@ class Sim(dict):
         _, _, _, _, method = self._render_psf_image(
             x=self.im_cen, y=self.im_cen)
 
-        im = np.zeros((self.dim, self.dim), dtype='f8')
+        im = galsim.ImageD(nrow=self.dim, ncol=self.dim, xmin=0, ymin=0)
 
         band_objects = [o[0] for o in all_band_obj]
         for obj, pos in zip(band_objects, positions):
@@ -89,20 +130,26 @@ class Sim(dict):
             # now get location of the stamp
             x_ll = int(pos.x - (_im.shape[1] - 1)/2)
             y_ll = int(pos.y - (_im.shape[0] - 1)/2)
-            assert x_ll >= 0 and x_ll < self.dim - _im.shape[1]
-            assert y_ll >= 0 and y_ll < self.dim - _im.shape[0]
+
+            # get the offset of the center
             dx = pos.x - (x_ll + (_im.shape[1] - 1)/2)
             dy = pos.y - (y_ll + (_im.shape[0] - 1)/2)
             dx *= self.pixelscale
             dy *= self.pixelscale
+
+            # draw and set the proper origin
             stamp = obj.shift(dx=dx, dy=dy).drawImage(
                 nx=_im.shape[1],
                 ny=_im.shape[0],
                 wcs=self.wcs,
                 method=method)
+            stamp.setOrigin(x_ll, y_ll)
 
-            im[y_ll:y_ll+stamp.array.shape[0],
-               x_ll:x_ll+stamp.array.shape[1]] += stamp.array
+            # intersect and add to total image
+            overlap = stamp.bounds & im.bounds
+            im[overlap] += stamp[overlap]
+
+        im = im.array.copy()
 
         im += self.rng.normal(scale=self.noise, size=im.shape)
         wt = im*0 + 1.0/self.noise**2
@@ -179,6 +226,21 @@ class Sim(dict):
 
         return obj
 
+    def _get_gal_ground_galsim_parametric(self):
+        if not hasattr(self, '_cosmo_cat'):
+            self._cosmo_cat = galsim.COSMOSCatalog(sample='25.2')
+        angle = self.rng.uniform() * 360
+        gal = self._cosmo_cat.makeGalaxy(
+            gal_type='parametric',
+            rng=self._galsim_rng
+        ).rotate(
+            angle * galsim.degrees
+        ).withScaledFlux(
+            # correct fluxes for a ground-like exposure in our units
+            9  # magic number that gets us approximately the right S/N
+        )
+        return gal
+
     def _get_band_objects(self):
         """Get a list of effective PSF-convolved galsim images w/ their
         offsets in the image.
@@ -200,6 +262,8 @@ class Sim(dict):
             # get the galaxy
             if self.gal_type == 'exp':
                 gal = self._get_gal_exp()
+            elif self.gal_type == 'ground_galsim_parametric':
+                gal = self._get_gal_ground_galsim_parametric()
             else:
                 raise ValueError('gal_type "%s" not valid!' % self.gal_type)
 
