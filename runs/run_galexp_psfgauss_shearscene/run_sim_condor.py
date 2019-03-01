@@ -10,6 +10,37 @@ from metadetect.metadetect import Metadetect
 from config import CONFIG
 
 
+def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
+    op = res['1p']
+    q = (
+        (op['flags'] == 0) &
+        (op['wmom_s2n'] > s2n_cut) &
+        (op['wmom_T_ratio'] > trat_cut))
+    if not np.any(q):
+        return None
+    g1p = op['wmom_g'][q, 0]
+
+    om = res['1m']
+    q = (
+        (om['flags'] == 0) &
+        (om['wmom_s2n'] > s2n_cut) &
+        (om['wmom_T_ratio'] > trat_cut))
+    if not np.any(q):
+        return None
+    g1m = om['wmom_g'][q, 0]
+
+    o = res['noshear']
+    q = (
+        (o['flags'] == 0) &
+        (o['wmom_s2n'] > s2n_cut) &
+        (o['wmom_T_ratio'] > trat_cut))
+    if not np.any(q):
+        return None
+    g1 = o['wmom_g'][q, 0]
+
+    return np.mean(g1p), np.mean(g1m), np.mean(g1)
+
+
 def _run_sim_mdet(seed):
     config = {}
     config.update(TEST_METADETECT_CONFIG)
@@ -26,7 +57,13 @@ def _run_sim_mdet(seed):
     md.go()
     mres = md.result
 
-    return pres, mres
+    outputs = {}
+    for s2n in [10, 15, 20]:
+        outputs[s2n] = (
+            _meas_shear(pres, s2n_cut=s2n, trat_cut=1.2),
+            _meas_shear(mres, s2n_cut=s2n, trat_cut=1.2))
+
+    return outputs
 
 
 print('running metadetect', flush=True)
