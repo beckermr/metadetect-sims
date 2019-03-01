@@ -5,37 +5,6 @@ import numpy as np
 import joblib
 
 
-def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
-    op = res['1p']
-    q = (
-        (op['flags'] == 0) &
-        (op['wmom_s2n'] > s2n_cut) &
-        (op['wmom_T_ratio'] > trat_cut))
-    if not np.any(q):
-        return None
-    g1p = op['wmom_g'][q, 0]
-
-    om = res['1m']
-    q = (
-        (om['flags'] == 0) &
-        (om['wmom_s2n'] > s2n_cut) &
-        (om['wmom_T_ratio'] > trat_cut))
-    if not np.any(q):
-        return None
-    g1m = om['wmom_g'][q, 0]
-
-    o = res['noshear']
-    q = (
-        (o['flags'] == 0) &
-        (o['wmom_s2n'] > s2n_cut) &
-        (o['wmom_T_ratio'] > trat_cut))
-    if not np.any(q):
-        return None
-    g1 = o['wmom_g'][q, 0]
-
-    return np.mean(g1p), np.mean(g1m), np.mean(g1)
-
-
 def _cut(prr, mrr):
     prr_keep = []
     mrr_keep = []
@@ -91,19 +60,9 @@ def _func(fname):
     try:
         with open(fname, 'rb') as fp:
             data = pickle.load(fp)
-            data_10 = []
-            data_15 = []
-            data_20 = []
-            for pres, mres in data:
-                data_10.append((
-                    _meas_shear(pres, s2n_cut=10),
-                    _meas_shear(mres, s2n_cut=10)))
-                data_15.append((
-                    _meas_shear(pres, s2n_cut=15),
-                    _meas_shear(mres, s2n_cut=15)))
-                data_20.append((
-                    _meas_shear(pres, s2n_cut=20),
-                    _meas_shear(mres, s2n_cut=20)))
+            data_10 = [d[10] for d in data]
+            data_15 = [d[15] for d in data]
+            data_20 = [d[20] for d in data]
         return [data_10, data_15, data_20]
     except Exception:
         return [], [], []
