@@ -17,15 +17,19 @@ class Sim(dict):
 
     Methods
     -------
+
+    Notes
+    -----
+
     """
     def __init__(
             self, *,
             rng, gal_type, psf_type,
             shear_scene=True,
-            n_coadd=10,
+            n_coadd=1,
             g1=0.02, g2=0.0,
             dim=225, buff=25,
-            noise=4.0,
+            noise=8.0,
             nobj_per_10k=80000):
         self.rng = rng
         self.gal_type = gal_type
@@ -190,12 +194,7 @@ class Sim(dict):
 
     def _get_gal_ground_galsim_parametric(self):
         if not hasattr(self, '_cosmo_cat'):
-            self._cosmo_cat = galsim.COSMOSCatalog(sample='23.5')
-        # set the flux
-        tel_diam = 4
-        exp_time = 90
-        ap_fac = tel_diam**2 / (2.4**2*(1.-0.33**2))
-
+            self._cosmo_cat = galsim.COSMOSCatalog(sample='25.2')
         angle = self.rng.uniform() * 360
         gal = self._cosmo_cat.makeGalaxy(
             gal_type='parametric',
@@ -203,8 +202,8 @@ class Sim(dict):
         ).rotate(
             angle * galsim.degrees
         ).withScaledFlux(
-            # correct fluxes for a ground-like exposure
-            ap_fac * exp_time
+            # correct fluxes for a ground-like exposure in our units
+            9  # magic number that gets us approximately the right S/N
         )
         return gal
 
