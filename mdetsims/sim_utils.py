@@ -14,13 +14,47 @@ class Sim(dict):
 
     Parameters
     ----------
+    rng : np.random.RandomState
+        An RNG to use for drawing the objects.
+    gal_type : str
+        The kind of galaxy to simulate.
+    psf_type : str
+        The kind of PSF to simulate.
+    shear_scene : bool
+        Whether or not to shear the full scene.
+    n_coadd : int
+        The number of single epoch images in a coadd. This number is used to
+        scale the noise.
+    g1 : float
+        The simulated shear for the 1-axis.
+    g2 : float
+        The simulated shear for the 2-axis.
+    dim : int
+        The total dimension of the image.
+    buff : int
+        The width of the buffer region.
+    noise : float
+        The noise for a single epoch image.
+    ngal : float
+        The number of objects to simulate per arcminute.
 
     Methods
     -------
+    get_mbobs()
+        Make a simulated MultiBandObsList for metadetect.
+    get_psf_obs(*, x, y):
+        Get an ngmix Observation of the PSF at the position (x, y).
 
     Notes
     -----
+    The valid kinds of galaxies are
 
+        'exp' : Sersic objects at very high s/n with n = 1
+        'ground_galsim_parametric' : a typical ground-based sample
+
+    The valid kinds of PSFs are
+
+        'gauss' : a FWHM 0.9 arcsecond Gaussian
     """
     def __init__(
             self, *,
@@ -30,7 +64,7 @@ class Sim(dict):
             g1=0.02, g2=0.0,
             dim=225, buff=25,
             noise=8.0,
-            nobj_per_10k=80000):
+            ngal=45.0):
         self.rng = rng
         self.gal_type = gal_type
         self.psf_type = psf_type
@@ -41,7 +75,7 @@ class Sim(dict):
         self.dim = dim
         self.buff = buff
         self.noise = noise / np.sqrt(self.n_coadd)
-        self.nobj_per_10k = nobj_per_10k
+        self.ngal = ngal
         self.im_cen = (dim - 1) / 2
 
         self._galsim_rng = galsim.BaseDeviate(
@@ -63,8 +97,8 @@ class Sim(dict):
         # so the number of things we want is
         # dims[0] * dims[1] / 1e4^2 * 80000 * frac * frac
         self.nobj = int(
-            self.dim * self.dim / 1e8 * self.nobj_per_10k *
-            frac * frac)
+            self.ngal *
+            (self.dim * self.pixelscale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
 
