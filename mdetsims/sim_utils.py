@@ -20,23 +20,31 @@ class Sim(dict):
         The kind of galaxy to simulate.
     psf_type : str
         The kind of PSF to simulate.
-    shear_scene : bool
+    shear_scene : bool, optional
         Whether or not to shear the full scene.
-    n_coadd : int
+    n_coadd : int, optional
         The number of single epoch images in a coadd. This number is used to
         scale the noise.
-    g1 : float
+    n_coadd_psf : int, optional
+        The number of PSF images to coadd for models with variable PSFs. The
+        default of None uses the same number of PSFs as `n_coadd`.
+    g1 : float, optional
         The simulated shear for the 1-axis.
-    g2 : float
+    g2 : float, optional
         The simulated shear for the 2-axis.
-    dim : int
+    dim : int, optional
         The total dimension of the image.
-    buff : int
+    buff : int, optional
         The width of the buffer region.
-    noise : float
+    noise : float, optional
         The noise for a single epoch image.
-    ngal : float
+    ngal : float, optional
         The number of objects to simulate per arcminute.
+    ps_kws : dict or None, optional
+        Extra keyword arguments to pass to the constructor for the
+        `PowerSpectrumPSF` PSF objects.
+    homogenize_psf : bool, optional
+        Apply PSF homogenization to the image.
 
     Methods
     -------
@@ -55,16 +63,21 @@ class Sim(dict):
     The valid kinds of PSFs are
 
         'gauss' : a FWHM 0.9 arcsecond Gaussian
+        'ps' : a PSF from power spectrum model for shape variation and
+            cubic model for size variation
     """
     def __init__(
             self, *,
             rng, gal_type, psf_type,
             shear_scene=True,
             n_coadd=1,
+            n_coadd_psf=None,
             g1=0.02, g2=0.0,
             dim=225, buff=25,
             noise=8.0,
-            ngal=45.0):
+            ngal=45.0,
+            ps_kws=None,
+            homogenize_psf=False):
         self.rng = rng
         self.gal_type = gal_type
         self.psf_type = psf_type
@@ -77,6 +90,9 @@ class Sim(dict):
         self.noise = noise / np.sqrt(self.n_coadd)
         self.ngal = ngal
         self.im_cen = (dim - 1) / 2
+        self.ps_kws = ps_kws
+        self.n_coadd_psf = n_coadd_psf or n_coadd
+        self.homogenize_psf = homogenize_psf
 
         self._galsim_rng = galsim.BaseDeviate(
             seed=self.rng.randint(low=1, high=2**32-1))
@@ -160,8 +176,9 @@ class Sim(dict):
 
         psf_obs = self.get_psf_obs(x=self.im_cen, y=self.im_cen)
 
-        # im, noise, psf_img = self._homogenize_psf(im, noise)
-        # psf_obs.set_image(psf_img)
+        if self.homogenize_psf:
+            im, noise, psf_img = self._homogenize_psf(im, noise)
+            psf_obs.set_image(psf_img)
 
         jac = ngmix.jacobian.Jacobian(
             row=self.im_cen,
@@ -182,28 +199,20 @@ class Sim(dict):
 
         return mbobs
 
-    # def _homogenize_psf(self, im, noise):
-    #     # homogenize the psf
-    #     def _func(row, col):
-    #         galsim_jac = self._get_local_jacobian(x=col, y=row)
-    #         image = galsim.ImageD(ncol=17, nrow=17, wcs=galsim_jac)
-    #         for psf in self._psfs:
-    #             _image = galsim.ImageD(ncol=17, nrow=17, wcs=galsim_jac)
-    #             _image = psf.draw(
-    #                 x=int(col+0.5),
-    #                 y=int(row+0.5),
-    #                 image=_image)
-    #             image += _image
-    #         psf_im = image.array
-    #         psf_im /= np.sum(psf_im)
-    #         return psf_im
-    #
-    #     hmg = PSFHomogenizer(_func, im.shape, patch_size=25, sigma=0.25)
-    #     him = hmg.homogenize_image(im)
-    #     hnoise = hmg.homogenize_image(noise)
-    #     psf_img = hmg.get_target_psf()
-    #
-    #     return him, hnoise, psf_img
+    def _homogenize_psf(self, im, noise):
+
+        def _func(row, col):
+            psf_im, _, _, _, _ = self._render_psf_image(
+                x=col,
+                y=row)
+            return psf_im
+
+        hmg = PSFHomogenizer(_func, im.shape, patch_size=25, sigma=0.25)
+        him = hmg.homogenize_image(im)
+        hnoise = hmg.homogenize_image(noise)
+        psf_img = hmg.get_target_psf()
+
+        return him, hnoise, psf_img
 
     def _get_local_jacobian(self, *, x, y):
         return self.wcs.jacobian(
@@ -291,6 +300,27 @@ class Sim(dict):
 
         return all_band_obj, positions
 
+    def _stack_ps_psfs(self, *, x, y, **kwargs):
+        if not hasattr(self, '_psfs'):
+            self._psfs = [
+                PowerSpectrumPSF(
+                    rng=self.rng,
+                    im_width=self.dim,
+                    buff=25,
+                    scale=self.pixelscale,
+                    **kwargs)
+                for _ in range(self.n_coadd)]
+
+        _psf_wcs = self._get_local_jacobian(x=x, y=y)
+
+        psf = galsim.Sum([
+            p.getPSF(galsim.PositionD(x=x, y=y))
+            for p in self._psfs])
+        psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
+        psf_im /= np.sum(psf_im)
+
+        return psf, psf_im
+
     def _render_psf_image(self, *, x, y):
         """Render the PSF image.
 
@@ -311,7 +341,12 @@ class Sim(dict):
 
         if self.psf_type == 'gauss':
             psf = galsim.Gaussian(fwhm=0.9)
-            psf_im = psf.drawImage(nx=33, ny=33, wcs=_psf_wcs).array
+            psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
+            psf_im /= np.sum(psf_im)
+            method = 'auto'
+        elif self.psf_type == 'ps':
+            kws = self.ps_kws or {}
+            psf, psf_im = self._stack_ps_psfs(x=x, y=y, **kws)
             method = 'auto'
         else:
             raise ValueError('psf_type "%s" not valid!' % self.psf_type)
