@@ -306,10 +306,10 @@ class Sim(dict):
                 PowerSpectrumPSF(
                     rng=self.rng,
                     im_width=self.dim,
-                    buff=25,
+                    buff=75,
                     scale=self.pixelscale,
                     **kwargs)
-                for _ in range(self.n_coadd)]
+                for _ in range(self.n_coadd_psf)]
 
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
