@@ -97,6 +97,14 @@ class PowerSpectrumPSF(object):
         g1, g2 = self._ps.getShear((xs, ys))
         mu = self._ps.getMagnification((xs, ys))
 
+        if mu < 0.1:
+            mu = 0.1
+
+        if g1*g1 + g2*g2 >= 1.0:
+            norm = np.sqrt(g1*g1 + g2*g2) / 0.5
+            g1 /= norm
+            g2 /= norm
+
         xs = (x - self._im_cen) * self._x_scale
         ys = (y - self._im_cen) * self._x_scale
         fwhm = (
