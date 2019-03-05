@@ -29,16 +29,20 @@ jobs:
 
               conda create -q -n test-env \
                 python=3.6 \
-                pip \
-                numpy \
-                ngmix \
-                galsim \
-                flake8 \
-                pytest
+                pip
             fi
 
             export PATH=`pwd`/miniconda/bin:$PATH
             source activate test-env
+
+            conda install -y \
+              numpy \
+              ngmix \
+              galsim \
+              flake8 \
+              pytest
+            conda update --all -y
+
             pip install -e .
 
       - save_cache:
