@@ -5,7 +5,7 @@ import pytest
 from ..sim_utils import Sim
 
 
-@pytest.mark.parametrize('gal_type', ['exp', 'ground_galsim_parametric'])
+@pytest.mark.parametrize('gal_type', ['exp'])
 @pytest.mark.parametrize('psf_type', ['gauss', 'ps'])
 @pytest.mark.parametrize('homogenize_psf', [False, True])
 @pytest.mark.parametrize('n_coadd_psf', [1, 2, 3])
@@ -36,7 +36,7 @@ def test_sim_seeding_reproduce(
     assert np.array_equal(mbobs1[0][0].psf.image, mbobs2[0][0].psf.image)
 
 
-@pytest.mark.parametrize('gal_type', ['exp', 'ground_galsim_parametric'])
+@pytest.mark.parametrize('gal_type', ['exp'])
 @pytest.mark.parametrize('psf_type', ['ps', 'gauss'])
 @pytest.mark.parametrize('homogenize_psf', [False, True])
 @pytest.mark.parametrize('n_coadd_psf', [1, 2, 3])
