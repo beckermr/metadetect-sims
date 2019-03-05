@@ -25,7 +25,7 @@ class PowerSpectrumPSF(object):
     getPSF(pos)
         Get a PSF model at a given position.
     """
-    def __init__(self, *, rng, im_width, buff, scale, trunc=10):
+    def __init__(self, *, rng, im_width, buff, scale, trunc=1):
         self._rng = rng
         self._im_cen = (im_width - 1)/2
         self._scale = scale
