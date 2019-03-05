@@ -32,6 +32,7 @@ jobs:
                 pip
             fi
 
+            cat ~/.condarc
             export PATH=`pwd`/miniconda/bin:$PATH
             source activate test-env
 
