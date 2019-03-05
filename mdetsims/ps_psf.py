@@ -23,6 +23,11 @@ class PowerSpectrumPSF(object):
         If not `None`, generate a noise field to add to the PSF images with
         desired noise. A value of 1e-2 generates a PSF image with an
         effective signal-to-noise of ~250.
+    variation_factor : float, optional
+        This factor is used internally to scale the overall variance in the
+        PSF shape power spectra and the change in the PSF size across the
+        image. Setting this factor greater than 1 results in more variation
+        and less than 1 results in less variation.
 
     Methods
     -------
@@ -30,7 +35,8 @@ class PowerSpectrumPSF(object):
         Get a PSF model at a given position.
     """
     def __init__(self, *,
-                 rng, im_width, buff, scale, trunc=1, noise_level=None):
+                 rng, im_width, buff, scale, trunc=1,
+                 noise_level=None, variation_factor=1):
         self._rng = rng
         self._im_cen = (im_width - 1)/2
         self._scale = scale
@@ -38,6 +44,7 @@ class PowerSpectrumPSF(object):
         self._x_scale = 2.0 / self._tot_width / scale
         self._noise_level = noise_level
         self._buff = buff
+        self._variation_factor = variation_factor
 
         # set the power spectrum and PSF params
         # Heymans et al, 2012 found L0 ~= 3 arcmin, given as 180 arcsec here.
@@ -54,7 +61,7 @@ class PowerSpectrumPSF(object):
             grid_spacing=gs,
             ngrid=ng,
             get_convergence=True,
-            variance=0.02**2,
+            variance=(0.02 * variation_factor)**2,
             rng=galsim.BaseDeviate(self._rng.randint(1, 2**30)))
 
         if self._noise_level is not None and self._noise_level > 0:
@@ -71,7 +78,7 @@ class PowerSpectrumPSF(object):
         lm, ls = _getlogmnsigma(0.9, 0.1)
         self._fwhm_central = np.exp(self._rng.normal() * ls + lm)
 
-        ls = 0.005
+        ls = 0.005 * variation_factor
         fac2 = 10
         fac3 = fac2 * 10
         self._fwhm_x = self._rng.normal() * ls
