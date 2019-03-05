@@ -63,7 +63,7 @@ def test_integration_ps_psf_variation_params():
 
 
 @pytest.mark.parametrize(
-    'n_coadd,n_coadd_psf,homogenize_psf, should_vary',
+    'n_coadd,n_coadd_psf,homogenize_psf,should_vary',
     [(100, 1, False, True),
      (100, 100, False, False),
      (100, 1, True, False),

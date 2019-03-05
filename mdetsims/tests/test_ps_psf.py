@@ -1,6 +1,8 @@
 import numpy as np
 import galsim
 
+import pytest
+
 from ..ps_psf import PowerSpectrumPSF
 
 
@@ -23,19 +25,22 @@ def test_ps_psf_smoke():
     assert psf_im.calculateFWHM() > 0.5
 
 
-def test_ps_psf_seeding():
+@pytest.mark.parametrize('noise_level', [None, 0, 1e-3])
+def test_ps_psf_seeding(noise_level):
     ps1 = PowerSpectrumPSF(
         rng=np.random.RandomState(seed=10),
         im_width=120,
         buff=20,
         scale=0.25,
-        trunc=10)
+        trunc=10,
+        noise_level=noise_level)
     ps2 = PowerSpectrumPSF(
         rng=np.random.RandomState(seed=10),
         im_width=120,
         buff=20,
         scale=0.25,
-        trunc=10)
+        trunc=10,
+        noise_level=noise_level)
 
     psf1 = ps1.getPSF(galsim.PositionD(x=10, y=10))
     psf_im1 = psf1.drawImage(scale=0.25)
@@ -46,14 +51,16 @@ def test_ps_psf_seeding():
     assert np.array_equal(psf_im1.array, psf_im2.array)
 
 
-def test_ps_psf_variation():
+@pytest.mark.parametrize('noise_level', [None, 0, 1e-3])
+def test_ps_psf_variation(noise_level):
     rng = np.random.RandomState(seed=10)
     ps = PowerSpectrumPSF(
         rng=rng,
         im_width=120,
         buff=20,
         scale=0.25,
-        trunc=10)
+        trunc=10,
+        noise_level=noise_level)
 
     psf1 = ps.getPSF(galsim.PositionD(x=0, y=0))
     psf_im1 = psf1.drawImage(scale=0.25)
@@ -69,19 +76,22 @@ def test_ps_psf_variation():
     assert np.abs(g21/g22 - 1) > 0.01
 
 
-def test_ps_psf_truncation():
+@pytest.mark.parametrize('noise_level', [None, 0, 1e-3])
+def test_ps_psf_truncation(noise_level):
     ps1 = PowerSpectrumPSF(
         rng=np.random.RandomState(seed=10),
         im_width=120,
         buff=20,
         scale=0.25,
-        trunc=1)
+        trunc=1,
+        noise_level=noise_level)
     ps2 = PowerSpectrumPSF(
         rng=np.random.RandomState(seed=10),
         im_width=120,
         buff=20,
         scale=0.25,
-        trunc=100)
+        trunc=100,
+        noise_level=noise_level)
 
     fwhms1 = []
     g1s1 = []

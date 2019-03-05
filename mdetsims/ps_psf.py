@@ -19,18 +19,25 @@ class PowerSpectrumPSF(object):
     trunc : float
         The truncation scale for the shape/magnification power spectrum
         used to generate the PSF variation.
+    noise_level : float, optional
+        If not `None`, generate a noise field to add to the PSF images with
+        desired noise. A value of 1e-2 generates a PSF image with an
+        effective signal-to-noise of ~250.
 
     Methods
     -------
     getPSF(pos)
         Get a PSF model at a given position.
     """
-    def __init__(self, *, rng, im_width, buff, scale, trunc=1):
+    def __init__(self, *,
+                 rng, im_width, buff, scale, trunc=1, noise_level=None):
         self._rng = rng
         self._im_cen = (im_width - 1)/2
         self._scale = scale
         self._tot_width = im_width + 2 * buff
         self._x_scale = 2.0 / self._tot_width / scale
+        self._noise_level = noise_level
+        self._buff = buff
 
         # set the power spectrum and PSF params
         # Heymans et al, 2012 found L0 ~= 3 arcmin, given as 180 arcsec here.
@@ -49,6 +56,11 @@ class PowerSpectrumPSF(object):
             get_convergence=True,
             variance=0.02**2,
             rng=galsim.BaseDeviate(self._rng.randint(1, 2**30)))
+
+        if self._noise_level is not None and self._noise_level > 0:
+            self._noise_field = self._rng.normal(
+                size=(im_width + buff + 37, im_width + buff + 37)
+            ) * noise_level
 
         def _getlogmnsigma(mean, sigma):
             logmean = np.log(mean) - 0.5*np.log(1 + sigma**2/mean**2)
@@ -113,4 +125,17 @@ class PowerSpectrumPSF(object):
         psf : galsim.GSObject
             A representation of the PSF as a galism object.
         """
-        return self._get_atm(pos.x, pos.y)
+        psf = self._get_atm(pos.x, pos.y)
+
+        if self._noise_level is not None and self._noise_level > 0:
+            xll = int(pos.x + self._buff - 16)
+            yll = int(pos.y + self._buff - 16)
+            assert xll >= 0 and xll+33 <= self._noise_field.shape[1]
+            assert yll >= 0 and yll+33 <= self._noise_field.shape[0]
+
+            stamp = self._noise_field[yll:yll+33, xll:xll+33].copy()
+            psf += galsim.InterpolatedImage(
+                galsim.ImageD(stamp, scale=self._scale),
+                normalization="sb")
+
+        return psf
