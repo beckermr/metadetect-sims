@@ -38,18 +38,17 @@ jobs:
             conda config --add channels defaults
             conda config --add channels conda-forge
             conda update -q conda
-            cat ~/.condarc
 
             source activate test-env
 
-            conda install -y \
+            conda install -y -q \
               nomkl \
               numpy \
               ngmix \
               galsim \
               flake8 \
               pytest
-            conda update --all -y
+            conda update --all -y -q
 
             pip install -e .
 
