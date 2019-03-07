@@ -178,7 +178,7 @@ class RealPSFGenerator(object):
         outputs = joblib.Parallel(
             verbose=10,
             n_jobs=int(n_jobs),
-            pre_dispatch=0,
+            pre_dispatch=1,
             max_nbytes=None)(jobs)
 
         ims = np.zeros(
