@@ -47,7 +47,8 @@ jobs:
               ngmix \
               galsim \
               flake8 \
-              pytest
+              pytest \
+              fitsio
             conda update --all -y -q
 
             pip install -e .
