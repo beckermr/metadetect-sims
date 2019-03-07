@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import galsim
 import fitsio
+import joblib
 
 LOGGER = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ class RealPSFGenerator(object):
         self._build_atm()
         self._build_optics()
 
-    def save_to_fits(self, filename, rng=None):
+    def save_to_fits(self, filename, rng=None, n_jobs=1):
         """Save a grid of PSF images to a file.
 
         Parameters
@@ -143,32 +144,49 @@ class RealPSFGenerator(object):
         filename : str
             The file in which to save the PSF images.
         rng : np.random.RandomState or None, optional
-            A numpy RNG to use. If None, then the BaseDeviate attached to the
-            class is used.
+            A numpy RNG to use. If None, then the rng attached to the class
+            is used.
+        n_jobs : int, optional
+            The number of cores to use. The default of 1 results in purely
+            serial execution.
         """
-        ims = np.zeros(
-            (self.im_width, self.im_width, self.psf_width, self.psf_width),
-            dtype='f4')
-        if rng is not None:
-            seeds = rng.randint(1, 2**32-1, size=self.im_width**2).astype(int)
+        rng = rng or self.rng
+        seeds = rng.randint(1, 2**32-1, size=self.im_width**2).astype(int)
+        # galsim chokes on numpy int64 types
+        seeds = [int(s) for s in seeds]
+        jobs = []
+        loc = 0
+
+        def _measure_psf(_gen, seed, x, y):
+            _rng = galsim.BaseDeviate(seed=seed)
+            psf = _gen.getPSF(galsim.PositionD(x=x, y=y))
+            psf_im = psf.drawImage(
+                    nx=_gen.psf_width,
+                    ny=_gen.psf_width,
+                    scale=_gen.scale,
+                    method='phot',
+                    n_photons=_gen.n_photons,
+                    rng=_rng)
+            return psf_im.array, x, y
 
         for y in range(self.im_width):
             for x in range(self.im_width):
-                if rng is not None:
-                    # galsim chokes on numpy int64 types
-                    _rng = galsim.BaseDeviate(
-                        seed=int(seeds[y * self.im_width + x]))
-                else:
-                    _rng = None
-                psf = self.getPSF(galsim.PositionD(x=x, y=y))
-                psf_im = psf.drawImage(
-                    nx=self.psf_width,
-                    ny=self.psf_width,
-                    scale=self.scale,
-                    method='phot',
-                    n_photons=self.n_photons,
-                    rng=_rng or self.base_deviate)
-                ims[y, x, :, :] = psf_im.array
+                jobs.append(
+                    joblib.delayed(_measure_psf)(self, seeds[loc], x, y))
+                loc += 1
+
+        outputs = joblib.Parallel(
+            verbose=10,
+            n_jobs=int(n_jobs),
+            pre_dispatch=0,
+            max_nbytes=None)(jobs)
+
+        ims = np.zeros(
+            (self.im_width, self.im_width, self.psf_width, self.psf_width),
+            dtype='f4')
+        for psf, x, y in outputs:
+            ims[y, x] = psf
+
         ims = ims.flatten()
         data = np.zeros(1, dtype=[
             ('im_width', 'i8'),

@@ -48,7 +48,8 @@ jobs:
               galsim \
               flake8 \
               pytest \
-              fitsio
+              fitsio \
+              joblib
             conda update --all -y -q
 
             pip install -e .
