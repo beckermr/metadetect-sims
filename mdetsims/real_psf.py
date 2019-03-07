@@ -169,6 +169,9 @@ class RealPSFGenerator(object):
                     rng=_rng)
             return psf_im.array, x, y
 
+        # do one to make sure the underlying atmosphere is allocated
+        _measure_psf(self, 5, 0, 0)
+
         for y in range(self.im_width):
             for x in range(self.im_width):
                 jobs.append(
@@ -178,7 +181,7 @@ class RealPSFGenerator(object):
         outputs = joblib.Parallel(
             verbose=10,
             n_jobs=int(n_jobs),
-            pre_dispatch=1,
+            pre_dispatch='n_jobs',
             max_nbytes=None)(jobs)
 
         ims = np.zeros(
