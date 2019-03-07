@@ -5,6 +5,8 @@ import pytest
 
 from ..sim_utils import Sim
 
+PIXEL_SCALE = 0.263
+
 
 class GridPSPSFSim(Sim):
     """A sim, but the sources are on a grid and they are point sources"""
@@ -13,6 +15,7 @@ class GridPSPSFSim(Sim):
             rng=np.random.RandomState(seed=10),
             gal_type='exp',
             psf_type='ps',
+            scale=PIXEL_SCALE,
             shear_scene=True,
             n_coadd=n_coadd,
             n_coadd_psf=n_coadd_psf,
@@ -21,7 +24,7 @@ class GridPSPSFSim(Sim):
             dim=225,
             buff=25,
             noise=8.0,
-            ngal=25/((225-25*2) * 0.25/60)**2,
+            ngal=25/((225-25*2) * PIXEL_SCALE/60)**2,
             psf_kws=None,
             homogenize_psf=homogenize_psf)
 

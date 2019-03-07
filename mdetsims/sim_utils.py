@@ -71,6 +71,7 @@ class Sim(dict):
     def __init__(
             self, *,
             rng, gal_type, psf_type,
+            scale,
             shear_scene=True,
             n_coadd=1,
             n_coadd_psf=None,
@@ -100,7 +101,7 @@ class Sim(dict):
             seed=self.rng.randint(low=1, high=2**32-1))
 
         # typical pixel scale
-        self.pixelscale = 0.25
+        self.pixelscale = scale
         self.wcs = galsim.PixelScale(self.pixelscale)
 
         # frac of a single dimension that is used for drawing objects

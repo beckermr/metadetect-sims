@@ -124,7 +124,7 @@ class RealPSFGenerator(object):
         self.n_photons = n_photons
         self._im_cen = (im_width - 1) / 2
 
-        width = self.field_of_view * 60 * 60 * 0.25
+        width = self.field_of_view * 60 * 60 * self.scale
         res = self.rng.uniform(
             low=-width,
             high=width,

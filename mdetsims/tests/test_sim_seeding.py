@@ -4,6 +4,8 @@ import pytest
 
 from ..sim_utils import Sim
 
+PIXEL_SCALE = 0.263
+
 
 @pytest.mark.parametrize('gal_type', ['exp'])
 @pytest.mark.parametrize('psf_type', ['gauss', 'ps'])
@@ -18,7 +20,8 @@ def test_sim_seeding_reproduce(
         psf_type=psf_type,
         homogenize_psf=homogenize_psf,
         n_coadd_psf=n_coadd_psf,
-        n_coadd=10)
+        n_coadd=10,
+        scale=PIXEL_SCALE)
 
     s2 = Sim(
         rng=np.random.RandomState(seed=10),
@@ -26,7 +29,8 @@ def test_sim_seeding_reproduce(
         psf_type=psf_type,
         homogenize_psf=homogenize_psf,
         n_coadd_psf=n_coadd_psf,
-        n_coadd=10)
+        n_coadd=10,
+        scale=PIXEL_SCALE)
 
     mbobs1 = s1.get_mbobs()
     mbobs2 = s2.get_mbobs()
@@ -49,7 +53,8 @@ def test_sim_seeding_not_reproduce(
         psf_type=psf_type,
         homogenize_psf=homogenize_psf,
         n_coadd_psf=n_coadd_psf,
-        n_coadd=10)
+        n_coadd=10,
+        scale=PIXEL_SCALE)
 
     s2 = Sim(
         rng=np.random.RandomState(seed=24357),
@@ -57,7 +62,8 @@ def test_sim_seeding_not_reproduce(
         psf_type=psf_type,
         homogenize_psf=homogenize_psf,
         n_coadd_psf=n_coadd_psf,
-        n_coadd=10)
+        n_coadd=10,
+        scale=PIXEL_SCALE)
 
     mbobs1 = s1.get_mbobs()
     mbobs2 = s2.get_mbobs()
@@ -83,7 +89,8 @@ def test_sim_seeding_shears(
         homogenize_psf=homogenize_psf,
         n_coadd_psf=n_coadd_psf,
         n_coadd=10,
-        g1=0.02)
+        g1=0.02,
+        scale=PIXEL_SCALE)
 
     s2 = Sim(
         rng=np.random.RandomState(seed=10),
@@ -92,7 +99,8 @@ def test_sim_seeding_shears(
         homogenize_psf=homogenize_psf,
         n_coadd_psf=n_coadd_psf,
         n_coadd=10,
-        g1=-0.02)
+        g1=-0.02,
+        scale=PIXEL_SCALE)
 
     mbobs1 = s1.get_mbobs()
     mbobs2 = s2.get_mbobs()
