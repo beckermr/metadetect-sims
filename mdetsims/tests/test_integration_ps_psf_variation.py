@@ -22,7 +22,7 @@ class GridPSPSFSim(Sim):
             buff=25,
             noise=8.0,
             ngal=25/((225-25*2) * 0.25/60)**2,
-            ps_kws=None,
+            psf_kws=None,
             homogenize_psf=homogenize_psf)
 
     def _get_dxdy(self):
