@@ -5,6 +5,7 @@ import logging
 
 from .psf_homogenizer import PSFHomogenizer
 from .ps_psf import PowerSpectrumPSF
+from .real_psf import RealPSF
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,9 +41,8 @@ class Sim(dict):
         The noise for a single epoch image.
     ngal : float, optional
         The number of objects to simulate per arcminute.
-    ps_kws : dict or None, optional
-        Extra keyword arguments to pass to the constructor for the
-        `PowerSpectrumPSF` PSF objects.
+    psf_kws : dict or None, optional
+        Extra keyword arguments to pass to the constructors for PSF objects.
     homogenize_psf : bool, optional
         Apply PSF homogenization to the image.
 
@@ -65,6 +65,8 @@ class Sim(dict):
         'gauss' : a FWHM 0.9 arcsecond Gaussian
         'ps' : a PSF from power spectrum model for shape variation and
             cubic model for size variation
+        'real_psf' : a PSF drawn randomly from a model of the atmosphere
+            and optics in a set of files
     """
     def __init__(
             self, *,
@@ -76,7 +78,7 @@ class Sim(dict):
             dim=225, buff=25,
             noise=8.0,
             ngal=45.0,
-            ps_kws=None,
+            psf_kws=None,
             homogenize_psf=False):
         self.rng = rng
         self.gal_type = gal_type
@@ -90,7 +92,7 @@ class Sim(dict):
         self.noise = noise / np.sqrt(self.n_coadd)
         self.ngal = ngal
         self.im_cen = (dim - 1) / 2
-        self.ps_kws = ps_kws
+        self.psf_kws = psf_kws
         self.n_coadd_psf = n_coadd_psf or n_coadd
         self.homogenize_psf = homogenize_psf
 
@@ -321,6 +323,23 @@ class Sim(dict):
 
         return psf, psf_im
 
+    def _stack_real_psfs(self, *, x, y, filenames):
+        if not hasattr(self, '_psfs'):
+            fnames = self.rng.choice(
+                filenames, size=self.n_coadd_psf, replace=False)
+            self._psfs = [RealPSF(fname) for fname in fnames]
+
+        _psf_wcs = self._get_local_jacobian(x=x, y=y)
+
+        psf = galsim.Sum([
+            p.getPSF(galsim.PositionD(x=x, y=y))
+            for p in self._psfs])
+        psf_im = psf.drawImage(
+            nx=21, ny=21, wcs=_psf_wcs, method='no_pixel').array.copy()
+        psf_im /= np.sum(psf_im)
+
+        return psf, psf_im
+
     def _render_psf_image(self, *, x, y):
         """Render the PSF image.
 
@@ -345,9 +364,13 @@ class Sim(dict):
             psf_im /= np.sum(psf_im)
             method = 'auto'
         elif self.psf_type == 'ps':
-            kws = self.ps_kws or {}
+            kws = self.psf_kws or {}
             psf, psf_im = self._stack_ps_psfs(x=x, y=y, **kws)
             method = 'auto'
+        elif self.psf_type == 'real_psf':
+            kws = self.psf_kws or {}
+            psf, psf_im = self._stack_ps_psfs(x=x, y=y, **kws)
+            method = 'no_pixel'
         else:
             raise ValueError('psf_type "%s" not valid!' % self.psf_type)
 

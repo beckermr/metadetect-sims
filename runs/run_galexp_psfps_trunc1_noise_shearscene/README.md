@@ -1,1 +1,0 @@
-# run_galexp_psfps_trunc1_noise_shearscene
