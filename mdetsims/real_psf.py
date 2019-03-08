@@ -199,11 +199,8 @@ class RealPSFGenerator(object):
             return ims, xs, ys
 
         # bundle to reduce overheads
-        # this limits the overhead to ~12% for drawing 5e6 to 1e7 photons,
-        # assuming it takes 90 seconds to build the phase screens and 7
-        # seconds to draw a PSF
         if n_jobs > 1:
-            n_per_job = 100
+            n_per_job = int(np.ceil(self.im_width * self.im_width / n_jobs))
         else:
             # if we are using 1 core, then compute the phase screens once
             n_per_job = self.im_width * self.im_width
