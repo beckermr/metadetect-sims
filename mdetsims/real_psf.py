@@ -181,8 +181,7 @@ class RealPSFGenerator(object):
         outputs = joblib.Parallel(
             verbose=10,
             n_jobs=int(n_jobs),
-            pre_dispatch='n_jobs',
-            max_nbytes=None)(jobs)
+            pre_dispatch='n_jobs')(jobs)
 
         ims = np.zeros(
             (self.im_width, self.im_width, self.psf_width, self.psf_width),
