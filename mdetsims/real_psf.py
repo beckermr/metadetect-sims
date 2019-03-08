@@ -240,9 +240,7 @@ class RealPSFGenerator(object):
 
         def _measure_psf(_gen, seeds, xs, ys):
             if isinstance(_gen, str):
-                from mdetsims.real_psf import RealPSFGenerator  # noqa
-                _gen = eval(_gen)
-                # _gen = joblib.load(_gen)
+                _gen = joblib.load(_gen)
             ims = []
             import tqdm
             for seed, x, y in tqdm.tqdm(zip(seeds, xs, ys), total=len(seeds)):
@@ -259,16 +257,15 @@ class RealPSFGenerator(object):
             return ims, xs, ys
 
         # call once to create screens
-        # _measure_psf(self, [1], [0], [0])
+        _measure_psf(self, [1], [0], [0])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             if n_jobs > 1:
                 # bundle to reduce overheads and predump the data
                 n_per_job = int(np.ceil(
                     self.im_width * self.im_width / n_jobs))
-                # fname = os.path.join(tmpdir, 'data.pkl')
-                # joblib.dump(self, fname)
-                fname = repr(self)
+                fname = os.path.join(tmpdir, 'data.pkl')
+                joblib.dump(self, fname)
             else:
                 # if we are using 1 core, then compute the phase screens once
                 n_per_job = self.im_width * self.im_width
@@ -344,16 +341,17 @@ class RealPSFGenerator(object):
         """
         x = pos.x - self._im_cen + self._cen_x
         y = pos.y - self._im_cen + self._cen_y
-        psf = self._atm.makePSF(
+        psf = self._screens.makePSF(
             lam=self.lam,
             exptime=self.exposure_time,
             diam=self.diam,
             obscuration=self.obscuration,
+            geometric_shooting=True,
             theta=(
                 (x * self.scale) * galsim.arcsec,
                 (y * self.scale) * galsim.arcsec))
 
-        return galsim.Convolve(self._optpsf, psf)
+        return psf
 
     def _build_atm(self):
         """Build an atmosphere following Jee and Tyson, galsim and my gut."""
@@ -406,7 +404,7 @@ class RealPSFGenerator(object):
         direction = [self.rng.uniform(0, 360) * galsim.degrees
                      for i in range(6)]
 
-        self._atm = galsim.Atmosphere(
+        self._screens = galsim.Atmosphere(
             r0_500=screen_r0_500,
             screen_size=screen_sizes,
             altitude=altitude,
@@ -430,12 +428,18 @@ class RealPSFGenerator(object):
             k: a * self.rng.normal()
             for k, a in zip(names, weights)}
 
-        self._optpsf = galsim.OpticalPSF(
-            lam=self.lam,
+        opt = galsim.OpticalScreen(
+            lam_0=self.lam,
             diam=self.diam,
             obscuration=self.obscuration,
-            suppress_warning=False,
             **kwargs)
+
+        # order them so I know where things are for later...
+        _screens = galsim.PhaseScreenList()
+        _screens.append(opt)
+        for i in range(len(self._screens)):
+            _screens.append(self._screens[i])
+        self._screens = _screens
 
 
 def get_good_fft_sizes(sizes):

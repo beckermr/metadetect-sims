@@ -1,7 +1,9 @@
 import os
+import time
 import numpy as np
 import galsim
 import fitsio
+import joblib
 
 from ..real_psf import RealPSF, RealPSFGenerator
 
@@ -108,3 +110,44 @@ def test_real_psf(tmpdir):
     assert np.allclose(
         psf.getPSF(galsim.PositionD(x=100.5, y=100.9)).image.array,
         images[2, 2])
+
+
+def test_real_psf_pickle(tmpdir):
+    gen = RealPSFGenerator(
+        seed=102,
+        scale=0.2143432,
+        effective_r0_500=1e5,  # set this really big so we can draw PSFs fast
+        im_width=3,
+        psf_width=17,
+        n_photons=1e5)
+
+    # first one is slower
+    im = gen.getPSF(
+        galsim.PositionD(x=1, y=0)
+    ).drawImage(
+        nx=17, ny=17, scale=0.25, method='phot', n_photons=1e6,
+        rng=galsim.BaseDeviate(seed=2))
+
+    t0 = time.time()
+    im = gen.getPSF(
+        galsim.PositionD(x=1, y=0)
+    ).drawImage(
+        nx=17, ny=17, scale=0.25, method='phot', n_photons=1e6,
+        rng=galsim.BaseDeviate(seed=2))
+    t0 = time.time() - t0
+
+    fname = os.path.join(tmpdir.dirname, 'test.pkl')
+    joblib.dump(gen, fname)
+
+    genp = joblib.load(fname)
+
+    t0p = time.time()
+    imp = genp.getPSF(
+        galsim.PositionD(x=1, y=0)
+    ).drawImage(
+        nx=17, ny=17, scale=0.25, method='phot', n_photons=1e6,
+        rng=galsim.BaseDeviate(seed=2))
+    t0p = time.time() - t0p
+
+    assert np.array_equal(im.array, imp.array)
+    assert np.abs(t0/t0p - 1) < 0.1 or t0p < t0

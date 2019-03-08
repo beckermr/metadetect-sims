@@ -49,7 +49,8 @@ jobs:
               flake8 \
               pytest \
               fitsio \
-              joblib
+              joblib \
+              tqdm
             conda update --all -y -q
 
             pip install -e .
