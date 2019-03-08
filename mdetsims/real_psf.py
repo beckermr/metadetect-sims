@@ -110,6 +110,7 @@ class RealPSFGenerator(object):
             im_width=225,
             psf_width=17,
             n_photons=5e6):
+        self.seed = seed
         self.rng = np.random.RandomState(seed=seed)
         self.base_deviate = galsim.BaseDeviate(self.rng.randint(1, 2**32-1))
         self.scale = scale
@@ -136,6 +137,26 @@ class RealPSFGenerator(object):
         self._build_atm()
         self._build_optics()
 
+    def __repr__(self):
+        s = 'RealPSFGenerator('
+        attrs = [
+            'seed',
+            'scale',
+            'exposure_time',
+            'lam',
+            'diam',
+            'obscuration',
+            'field_of_view',
+            'effective_r0_500',
+            'im_width',
+            'psf_width',
+            'n_photons']
+        for attr in attrs:
+            s += '%s=%s,' % (attr, getattr(self, attr))
+        s = s[:-1]
+        s += ')'
+        return s
+
     def save_to_fits(self, filename, rng=None, n_jobs=1):
         """Save a grid of PSF images to a file.
 
@@ -157,7 +178,8 @@ class RealPSFGenerator(object):
         jobs = []
         loc = 0
 
-        def _measure_psf(_gen, seeds, xs, ys):
+        def _measure_psf(gen_str, seeds, xs, ys):
+            _gen = eval(gen_str)
             ims = []
             for seed, x, y in zip(seeds, xs, ys):
                 _rng = galsim.BaseDeviate(seed=seed)
@@ -172,15 +194,15 @@ class RealPSFGenerator(object):
                 ims.append(psf_im.array)
             return ims, xs, ys
 
-        # do one to make sure the underlying atmosphere is allocated
-        _measure_psf(self, [5], [0], [0])
-
-        # get job size to help reduce overheads for large arrays
-        if n_jobs <= 0:
-            n_jobs = self.im_width**2
-        n_per_job = np.ceil(self.im_width**2 / n_jobs / 10)
-        if n_per_job <= 0:
-            n_per_job = 1
+        # bundle to reduce overheads
+        # this limits the overhead to ~12% for drawing 5e6 to 1e7 photons,
+        # assuming it takes 90 seconds to build the phase screens and 7
+        # seconds to draw a PSF
+        if n_jobs > 1:
+            n_per_job = 100
+        else:
+            # if we are using 1 core, then compute the phase screens once
+            n_per_job = self.im_width * self.im_width
 
         _xs = []
         _ys = []
@@ -195,14 +217,15 @@ class RealPSFGenerator(object):
 
                 if len(_seeds) == n_per_job:
                     jobs.append(
-                        joblib.delayed(_measure_psf)(self, _seeds, _xs, _ys))
+                        joblib.delayed(_measure_psf)(
+                            repr(self), _seeds, _xs, _ys))
                     _xs = []
                     _ys = []
                     _seeds = []
 
         if len(_seeds) > 0:
             jobs.append(
-                joblib.delayed(_measure_psf)(self, _seeds, _xs, _ys))
+                joblib.delayed(_measure_psf)(repr(self), _seeds, _xs, _ys))
 
         # make sure they all get submitted
         assert loc == self.im_width * self.im_width
