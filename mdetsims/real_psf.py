@@ -157,37 +157,70 @@ class RealPSFGenerator(object):
         jobs = []
         loc = 0
 
-        def _measure_psf(_gen, seed, x, y):
-            _rng = galsim.BaseDeviate(seed=seed)
-            psf = _gen.getPSF(galsim.PositionD(x=x, y=y))
-            psf_im = psf.drawImage(
-                    nx=_gen.psf_width,
-                    ny=_gen.psf_width,
-                    scale=_gen.scale,
-                    method='phot',
-                    n_photons=_gen.n_photons,
-                    rng=_rng)
-            return psf_im.array, x, y
+        def _measure_psf(_gen, seeds, xs, ys):
+            ims = []
+            for seed, x, y in zip(seeds, xs, ys):
+                _rng = galsim.BaseDeviate(seed=seed)
+                psf = _gen.getPSF(galsim.PositionD(x=x, y=y))
+                psf_im = psf.drawImage(
+                        nx=_gen.psf_width,
+                        ny=_gen.psf_width,
+                        scale=_gen.scale,
+                        method='phot',
+                        n_photons=_gen.n_photons,
+                        rng=_rng)
+                ims.append(psf_im.array)
+            return ims, xs, ys
 
         # do one to make sure the underlying atmosphere is allocated
-        _measure_psf(self, 5, 0, 0)
+        _measure_psf(self, [5], [0], [0])
 
+        # get job size to help reduce overheads for large arrays
+        if n_jobs <= 0:
+            n_jobs = self.im_width**2
+        n_per_job = np.ceil(self.im_width**2 / n_jobs / 10)
+        if n_per_job <= 0:
+            n_per_job = 1
+
+        _xs = []
+        _ys = []
+        _seeds = []
         for y in range(self.im_width):
             for x in range(self.im_width):
-                jobs.append(
-                    joblib.delayed(_measure_psf)(self, seeds[loc], x, y))
-                loc += 1
+                if len(_seeds) < n_per_job:
+                    _xs.append(x)
+                    _ys.append(y)
+                    _seeds.append(seeds[loc])
+                    loc += 1
+
+                if len(_seeds) == n_per_job:
+                    jobs.append(
+                        joblib.delayed(_measure_psf)(self, _seeds, _xs, _ys))
+                    _xs = []
+                    _ys = []
+                    _seeds = []
+
+        if len(_seeds) > 0:
+            jobs.append(
+                joblib.delayed(_measure_psf)(self, _seeds, _xs, _ys))
+
+        # make sure they all get submitted
+        assert loc == self.im_width * self.im_width
 
         outputs = joblib.Parallel(
             verbose=10,
             n_jobs=int(n_jobs),
             pre_dispatch='n_jobs')(jobs)
 
+        # make sure they all get done
+        assert sum(len(o[0]) for o in outputs) == self.im_width * self.im_width
+
         ims = np.zeros(
             (self.im_width, self.im_width, self.psf_width, self.psf_width),
             dtype='f4')
-        for psf, x, y in outputs:
-            ims[y, x] = psf
+        for psfs, xs, ys in outputs:
+            for psf, x, y in zip(psfs, xs, ys):
+                ims[y, x] = psf
 
         ims = ims.flatten()
         data = np.zeros(1, dtype=[
