@@ -175,6 +175,62 @@ class RealPSFGenerator(object):
         seeds = rng.randint(1, 2**32-1, size=self.im_width**2).astype(int)
         # galsim chokes on numpy int64 types
         seeds = [int(s) for s in seeds]
+
+        pos = []
+        for y in range(self.im_width):
+            for x in range(self.im_width):
+                pos.append(galsim.PositionD(x=x, y=y))
+
+        ims = np.zeros(
+            (self.im_width, self.im_width, self.psf_width, self.psf_width),
+            dtype='f4')
+
+        import tqdm
+        for p, s in tqdm.tqdm(zip(pos, seeds), total=len(pos)):
+            x = int(p.x)
+            y = int(p.y)
+            _rng = galsim.BaseDeviate(seed=s)
+            psf = self.getPSF(p)
+            psf_im = psf.drawImage(
+                    nx=self.psf_width,
+                    ny=self.psf_width,
+                    scale=self.scale,
+                    method='phot',
+                    n_photons=self.n_photons,
+                    rng=_rng)
+            ims[y, x] = psf_im.array
+
+        ims = ims.flatten()
+        data = np.zeros(1, dtype=[
+            ('im_width', 'i8'),
+            ('psf_width', 'i8'),
+            ('scale', 'f8'),
+            ('flat_image', 'f4', ims.shape[0])])
+        data['im_width'] = self.im_width
+        data['psf_width'] = self.psf_width
+        data['scale'] = self.scale
+        data['flat_image'][0] = ims
+
+        fitsio.write(filename, data, clobber=True)
+
+    def save_to_fits_parallel(self, filename, rng=None, n_jobs=1):
+        """Save a grid of PSF images to a file.
+
+        Parameters
+        ----------
+        filename : str
+            The file in which to save the PSF images.
+        rng : np.random.RandomState or None, optional
+            A numpy RNG to use. If None, then the rng attached to the class
+            is used.
+        n_jobs : int, optional
+            The number of cores to use. The default of 1 results in purely
+            serial execution.
+        """
+        rng = rng or self.rng
+        seeds = rng.randint(1, 2**32-1, size=self.im_width**2).astype(int)
+        # galsim chokes on numpy int64 types
+        seeds = [int(s) for s in seeds]
         jobs = []
         loc = 0
 
