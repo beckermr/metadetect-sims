@@ -1,8 +1,12 @@
 import logging
+import tempfile
+import os
+
 import numpy as np
 import galsim
 import fitsio
 import joblib
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -157,7 +161,7 @@ class RealPSFGenerator(object):
         s += ')'
         return s
 
-    def save_to_fits(self, filename, rng=None, n_jobs=1):
+    def save_to_fits_serial(self, filename, rng=None, n_jobs=1):
         """Save a grid of PSF images to a file.
 
         Parameters
@@ -213,7 +217,7 @@ class RealPSFGenerator(object):
 
         fitsio.write(filename, data, clobber=True)
 
-    def save_to_fits_parallel(self, filename, rng=None, n_jobs=1):
+    def save_to_fits(self, filename, rng=None, n_jobs=1):
         """Save a grid of PSF images to a file.
 
         Parameters
@@ -235,6 +239,8 @@ class RealPSFGenerator(object):
         loc = 0
 
         def _measure_psf(_gen, seeds, xs, ys):
+            if isinstance(_gen, str):
+                _gen = joblib.load(_gen)
             ims = []
             for seed, x, y in zip(seeds, xs, ys):
                 _rng = galsim.BaseDeviate(seed=seed)
@@ -252,44 +258,48 @@ class RealPSFGenerator(object):
         # call once to create screens
         _measure_psf(self, [1], [0], [0])
 
-        # bundle to reduce overheads
-        if n_jobs > 1:
-            n_per_job = 100
-            # int(np.ceil(self.im_width * self.im_width / n_jobs))
-        else:
-            # if we are using 1 core, then compute the phase screens once
-            n_per_job = self.im_width * self.im_width
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fname = os.path.join(tmpdir, 'data.pkl')
+            joblib.dump(self, fname)
 
-        _xs = []
-        _ys = []
-        _seeds = []
-        for y in range(self.im_width):
-            for x in range(self.im_width):
-                if len(_seeds) < n_per_job:
-                    _xs.append(x)
-                    _ys.append(y)
-                    _seeds.append(seeds[loc])
-                    loc += 1
+            # bundle to reduce overheads
+            if n_jobs > 1:
+                n_per_job = 100
+                # int(np.ceil(self.im_width * self.im_width / n_jobs))
+            else:
+                # if we are using 1 core, then compute the phase screens once
+                n_per_job = self.im_width * self.im_width
 
-                if len(_seeds) == n_per_job:
-                    jobs.append(
-                        joblib.delayed(_measure_psf)(
-                            self, _seeds, _xs, _ys))
-                    _xs = []
-                    _ys = []
-                    _seeds = []
+            _xs = []
+            _ys = []
+            _seeds = []
+            for y in range(self.im_width):
+                for x in range(self.im_width):
+                    if len(_seeds) < n_per_job:
+                        _xs.append(x)
+                        _ys.append(y)
+                        _seeds.append(seeds[loc])
+                        loc += 1
 
-        if len(_seeds) > 0:
-            jobs.append(
-                joblib.delayed(_measure_psf)(self, _seeds, _xs, _ys))
+                    if len(_seeds) == n_per_job:
+                        jobs.append(
+                            joblib.delayed(_measure_psf)(
+                                fname, _seeds, _xs, _ys))
+                        _xs = []
+                        _ys = []
+                        _seeds = []
 
-        # make sure they all get submitted
-        assert loc == self.im_width * self.im_width
+            if len(_seeds) > 0:
+                jobs.append(
+                    joblib.delayed(_measure_psf)(fname, _seeds, _xs, _ys))
 
-        outputs = joblib.Parallel(
-            verbose=10,
-            n_jobs=int(n_jobs),
-            pre_dispatch='n_jobs')(jobs)
+            # make sure they all get submitted
+            assert loc == self.im_width * self.im_width
+
+            outputs = joblib.Parallel(
+                verbose=10,
+                n_jobs=int(n_jobs),
+                pre_dispatch='n_jobs')(jobs)
 
         # make sure they all get done
         assert sum(len(o[0]) for o in outputs) == self.im_width * self.im_width
