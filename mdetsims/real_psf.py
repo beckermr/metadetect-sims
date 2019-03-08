@@ -242,7 +242,8 @@ class RealPSFGenerator(object):
             if isinstance(_gen, str):
                 _gen = joblib.load(_gen)
             ims = []
-            for seed, x, y in zip(seeds, xs, ys):
+            import tqdm
+            for seed, x, y in tqdm.tqdm(zip(seeds, xs, ys), total=len(seeds)):
                 _rng = galsim.BaseDeviate(seed=seed)
                 psf = _gen.getPSF(galsim.PositionD(x=x, y=y))
                 psf_im = psf.drawImage(
@@ -259,16 +260,16 @@ class RealPSFGenerator(object):
         _measure_psf(self, [1], [0], [0])
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            fname = os.path.join(tmpdir, 'data.pkl')
-            joblib.dump(self, fname)
-
-            # bundle to reduce overheads
             if n_jobs > 1:
-                n_per_job = 100
-                # int(np.ceil(self.im_width * self.im_width / n_jobs))
+                # bundle to reduce overheads and predump the data
+                n_per_job = int(np.ceil(
+                    self.im_width * self.im_width / n_jobs))
+                fname = os.path.join(tmpdir, 'data.pkl')
+                joblib.dump(self, fname)
             else:
                 # if we are using 1 core, then compute the phase screens once
                 n_per_job = self.im_width * self.im_width
+                fname = self
 
             _xs = []
             _ys = []
