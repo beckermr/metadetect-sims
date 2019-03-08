@@ -179,7 +179,11 @@ class RealPSFGenerator(object):
         loc = 0
 
         def _measure_psf(gen_str, seeds, xs, ys):
-            _gen = eval(gen_str)
+            try:
+                _gen = eval(gen_str)
+            except Exception:
+                from mdetsims.real_psf import RealPSFGenerator  # noqa
+                _gen = eval(gen_str)
             ims = []
             for seed, x, y in zip(seeds, xs, ys):
                 _rng = galsim.BaseDeviate(seed=seed)
