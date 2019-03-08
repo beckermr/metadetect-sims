@@ -178,12 +178,7 @@ class RealPSFGenerator(object):
         jobs = []
         loc = 0
 
-        def _measure_psf(gen_str, seeds, xs, ys):
-            try:
-                _gen = eval(gen_str)
-            except Exception:
-                from mdetsims.real_psf import RealPSFGenerator  # noqa
-                _gen = eval(gen_str)
+        def _measure_psf(_gen, seeds, xs, ys):
             ims = []
             for seed, x, y in zip(seeds, xs, ys):
                 _rng = galsim.BaseDeviate(seed=seed)
@@ -219,14 +214,14 @@ class RealPSFGenerator(object):
                 if len(_seeds) == n_per_job:
                     jobs.append(
                         joblib.delayed(_measure_psf)(
-                            repr(self), _seeds, _xs, _ys))
+                            self, _seeds, _xs, _ys))
                     _xs = []
                     _ys = []
                     _seeds = []
 
         if len(_seeds) > 0:
             jobs.append(
-                joblib.delayed(_measure_psf)(repr(self), _seeds, _xs, _ys))
+                joblib.delayed(_measure_psf)(self, _seeds, _xs, _ys))
 
         # make sure they all get submitted
         assert loc == self.im_width * self.im_width
