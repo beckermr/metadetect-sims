@@ -285,14 +285,14 @@ class RealPSFGenerator(object):
                     if len(_seeds) == n_per_job:
                         jobs.append(
                             joblib.delayed(_measure_psf)(
-                                fname, _seeds, _xs, _ys))
+                                self, _seeds, _xs, _ys))
                         _xs = []
                         _ys = []
                         _seeds = []
 
             if len(_seeds) > 0:
                 jobs.append(
-                    joblib.delayed(_measure_psf)(fname, _seeds, _xs, _ys))
+                    joblib.delayed(_measure_psf)(self, _seeds, _xs, _ys))
 
             # make sure they all get submitted
             assert loc == self.im_width * self.im_width
@@ -300,6 +300,7 @@ class RealPSFGenerator(object):
             outputs = joblib.Parallel(
                 verbose=10,
                 n_jobs=int(n_jobs),
+                prefer="threads",
                 pre_dispatch='n_jobs')(jobs)
 
         # make sure they all get done
