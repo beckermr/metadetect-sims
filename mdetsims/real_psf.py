@@ -240,7 +240,9 @@ class RealPSFGenerator(object):
 
         def _measure_psf(_gen, seeds, xs, ys):
             if isinstance(_gen, str):
-                _gen = joblib.load(_gen)
+                from mdetsims.real_psf import RealPSFGenerator  # noqa
+                _gen = eval(_gen)
+                # _gen = joblib.load(_gen)
             ims = []
             import tqdm
             for seed, x, y in tqdm.tqdm(zip(seeds, xs, ys), total=len(seeds)):
@@ -257,15 +259,16 @@ class RealPSFGenerator(object):
             return ims, xs, ys
 
         # call once to create screens
-        _measure_psf(self, [1], [0], [0])
+        # _measure_psf(self, [1], [0], [0])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             if n_jobs > 1:
                 # bundle to reduce overheads and predump the data
                 n_per_job = int(np.ceil(
                     self.im_width * self.im_width / n_jobs))
-                fname = os.path.join(tmpdir, 'data.pkl')
-                joblib.dump(self, fname)
+                # fname = os.path.join(tmpdir, 'data.pkl')
+                # joblib.dump(self, fname)
+                fname = repr(self)
             else:
                 # if we are using 1 core, then compute the phase screens once
                 n_per_job = self.im_width * self.im_width
@@ -285,14 +288,14 @@ class RealPSFGenerator(object):
                     if len(_seeds) == n_per_job:
                         jobs.append(
                             joblib.delayed(_measure_psf)(
-                                self, _seeds, _xs, _ys))
+                                fname, _seeds, _xs, _ys))
                         _xs = []
                         _ys = []
                         _seeds = []
 
             if len(_seeds) > 0:
                 jobs.append(
-                    joblib.delayed(_measure_psf)(self, _seeds, _xs, _ys))
+                    joblib.delayed(_measure_psf)(fname, _seeds, _xs, _ys))
 
             # make sure they all get submitted
             assert loc == self.im_width * self.im_width
@@ -300,8 +303,7 @@ class RealPSFGenerator(object):
             outputs = joblib.Parallel(
                 verbose=10,
                 n_jobs=int(n_jobs),
-                prefer="threads",
-                pre_dispatch='n_jobs')(jobs)
+                pre_dispatch='2*n_jobs')(jobs)
 
         # make sure they all get done
         assert sum(len(o[0]) for o in outputs) == self.im_width * self.im_width
