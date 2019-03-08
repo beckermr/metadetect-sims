@@ -193,9 +193,13 @@ class RealPSFGenerator(object):
                 ims.append(psf_im.array)
             return ims, xs, ys
 
+        # call once to create screens
+        _measure_psf(self, [1], [0], [0])
+
         # bundle to reduce overheads
         if n_jobs > 1:
-            n_per_job = int(np.ceil(self.im_width * self.im_width / n_jobs))
+            n_per_job = 100
+            # int(np.ceil(self.im_width * self.im_width / n_jobs))
         else:
             # if we are using 1 core, then compute the phase screens once
             n_per_job = self.im_width * self.im_width
