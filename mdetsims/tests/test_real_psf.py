@@ -5,7 +5,7 @@ import galsim
 import fitsio
 import joblib
 
-from ..real_psf import RealPSF, RealPSFGenerator
+from ..real_psf import RealPSFNearest, RealPSFGenerator, RealPSFGP
 
 
 def test_real_psf_gen(tmpdir):
@@ -28,7 +28,7 @@ def test_real_psf_gen(tmpdir):
     seed = int(seeds[2*3 + 1])
     gs_rng = galsim.BaseDeviate(seed)
 
-    psf = RealPSF(fname)
+    psf = RealPSFNearest(fname)
 
     # draw with both and make sure they are the same
     pos = galsim.PositionD(x=1, y=2)
@@ -92,7 +92,7 @@ def test_real_psf(tmpdir):
 
     fitsio.write(fname, d, clobber=True)
 
-    psf = RealPSF(fname)
+    psf = RealPSFNearest(fname)
 
     assert psf.im_width == im_width
     assert psf.psf_width == psf_width
@@ -151,3 +151,47 @@ def test_real_psf_pickle(tmpdir):
 
     assert np.array_equal(im.array, imp.array)
     assert np.abs(t0/t0p - 1) < 0.1 or t0p < t0
+
+
+def test_real_psf_gen_grid(tmpdir):
+    fname = os.path.join(tmpdir.dirname, 'test.fits')
+    gen = RealPSFGenerator(
+        seed=102,
+        scale=0.2143432,
+        effective_r0_500=1e5,  # set this really big so we can draw PSFs fast
+        im_width=25,
+        grid_spacing=5,
+        psf_width=17,
+        n_photons=1e5)
+
+    rng = np.random.RandomState(seed=2398)
+    gen.save_to_fits(fname, rng=rng)
+
+    d = fitsio.read(fname)
+    assert d['im_width'][0] == 25
+    assert d['psf_width'][0] == 17
+    assert d['grid_spacing'][0] == 5
+    assert d['flat_image'][0].shape[0] == 6*6*17*17
+
+    rng = np.random.RandomState(seed=2398)
+    seeds = rng.randint(1, 2**32-1, size=5*5)
+    # galsim chokes on np.int64 types
+    seed = int(seeds[2*3 + 1])
+    gs_rng = galsim.BaseDeviate(seed)
+
+    psf = RealPSFGP(fname)
+
+    # draw with both and make sure they are the same
+    pos = galsim.PositionD(x=1, y=2)
+    psf_saved = psf.getPSF(pos)
+    psf_gen = gen.getPSF(galsim.PositionD(x=1, y=2))
+    psf_gen = psf_gen.drawImage(
+        nx=gen.psf_width,
+        ny=gen.psf_width,
+        scale=gen.scale,
+        method='phot',
+        n_photons=gen.n_photons,
+        rng=gs_rng)
+
+    # not a great test, but makes sure it doesn't get worse
+    assert np.median(np.abs(psf_gen.array - psf_saved.image.array)) < 2e-5

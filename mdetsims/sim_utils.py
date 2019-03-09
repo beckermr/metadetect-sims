@@ -5,7 +5,7 @@ import logging
 
 from .psf_homogenizer import PSFHomogenizer
 from .ps_psf import PowerSpectrumPSF
-from .real_psf import RealPSF
+from .real_psf import RealPSFGP
 
 LOGGER = logging.getLogger(__name__)
 
@@ -328,7 +328,7 @@ class Sim(dict):
         if not hasattr(self, '_psfs'):
             fnames = self.rng.choice(
                 filenames, size=self.n_coadd_psf, replace=False)
-            self._psfs = [RealPSF(fname) for fname in fnames]
+            self._psfs = [RealPSFGP(fname) for fname in fnames]
 
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
