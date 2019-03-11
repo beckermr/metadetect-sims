@@ -5,7 +5,7 @@ import logging
 
 from .psf_homogenizer import PSFHomogenizer
 from .ps_psf import PowerSpectrumPSF
-from .real_psf import RealPSFGP
+from .real_psf import RealPSF
 
 LOGGER = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class Sim(dict):
             n_coadd_psf=None,
             g1=0.02, g2=0.0,
             dim=225, buff=25,
-            noise=8.0,
+            noise=1.8e4,
             ngal=45.0,
             psf_kws=None,
             homogenize_psf=False):
@@ -248,8 +248,9 @@ class Sim(dict):
         ).rotate(
             angle * galsim.degrees
         ).withScaledFlux(
-            # correct fluxes for a ground-like exposure in our units
-            9  # magic number that gets us approximately the right S/N
+            (4.0**2 * (1.0 - 0.42**2)) /
+            (2.4**2 * (1.0 - 0.33**2)) *
+            90
         )
         return gal
 
@@ -328,7 +329,7 @@ class Sim(dict):
         if not hasattr(self, '_psfs'):
             fnames = self.rng.choice(
                 filenames, size=self.n_coadd_psf, replace=False)
-            self._psfs = [RealPSFGP(fname) for fname in fnames]
+            self._psfs = [RealPSF(fname) for fname in fnames]
 
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
@@ -370,7 +371,7 @@ class Sim(dict):
             method = 'auto'
         elif self.psf_type == 'real_psf':
             kws = self.psf_kws or {}
-            psf, psf_im = self._stack_ps_psfs(x=x, y=y, **kws)
+            psf, psf_im = self._stack_real_psfs(x=x, y=y, **kws)
             method = 'no_pixel'
         else:
             raise ValueError('psf_type "%s" not valid!' % self.psf_type)

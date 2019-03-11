@@ -11,6 +11,7 @@ import galsim
 import fitsio
 import joblib
 
+from .lhs import get_optimized_lhs_design
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ GOOD_FFT_SIZES = np.sort(np.array([
     3840, 4096, 5120, 6400, 6912, 7680, 8192], dtype=int))
 
 
-class RealPSFGP(object):
+class RealPSF(object):
     """A class to generate real PSFs using optics + atmosphere from a set of
     serialized PSF images.
 
@@ -40,31 +41,23 @@ class RealPSFGP(object):
         d = fitsio.read(filename)
         self.im_width = d['im_width'][0]
         self.psf_width = d['psf_width'][0]
-        self.grid_spacing = d['grid_spacing'][0]
         self.scale = d['scale'][0]
         self.n_photons = d['n_photons'][0]
 
-        locs, npts = _get_locs_npts(self.im_width, self.grid_spacing)
-        self.psf_images = d['flat_image'][0].reshape(
-            npts, npts, self.psf_width, self.psf_width)
-        self._locs = locs
-        self._npts = npts
+        self.psf_images = d['images'][0]
+        self.psf_locs = d['locs'][0]
+
         self._interp_psf()
 
     def _interp_psf(self):
         # pca
-        nc = min(50, self._npts * self._npts)
-        X = self.psf_images.reshape(-1, self.psf_width * self.psf_width)
+        nc = min(5, self.psf_locs.shape[0])
         self._pca = PCA(n_components=nc)
-        yc = self._pca.fit_transform(X)
+        yc = self._pca.fit_transform(
+            self.psf_images.reshape(self.psf_images.shape[0], -1))
 
         # get scaled positions
-        slocs = self._locs / self.im_width
-        Xc = []
-        for y in slocs:
-            for x in slocs:
-                Xc.append([y, x])
-        Xc = np.array(Xc)
+        Xc = self.psf_locs / self.im_width
 
         # we need an estimate of the noise in the PCA comps for the fit.
         # howver, we know the number of photons used and have a mean
@@ -79,7 +72,8 @@ class RealPSFGP(object):
         # gaussian process it
         kernel = ConstantKernel() * RBF()
         self._gps = []
-        for ind in range(nc):
+        import tqdm
+        for ind in tqdm.trange(nc):
             gp = GaussianProcessRegressor(
                 kernel=kernel,
                 alpha=c_std[ind]**2,
@@ -109,52 +103,6 @@ class RealPSFGP(object):
         rim = self._pca.inverse_transform(c)[0].reshape(
             self.psf_width, self.psf_width)
         return galsim.InterpolatedImage(galsim.ImageD(rim), scale=self.scale)
-
-
-class RealPSFNearest(object):
-    """A class to generate real PSFs using optics + atmosphere from a set of
-    serialized PSF images.
-
-    Parameters
-    ----------
-    filename : str
-        The FITS file with the PSF images.
-
-    Methods
-    -------
-    getPSF(pos)
-        Get the PSF at a given position.
-    """
-    def __init__(self, filename):
-        self.filename = filename
-        d = fitsio.read(filename)
-        self.im_width = d['im_width'][0]
-        self.psf_width = d['psf_width'][0]
-        self.scale = d['scale'][0]
-        self.psf_images = d['flat_image'][0].reshape(
-            self.im_width, self.im_width, self.psf_width, self.psf_width)
-
-    def getPSF(self, pos):
-        """Get a PSF model at a given position.
-
-        Note the nearest integer position is used. One should always use
-        `method = 'no_pixel'` when drawing with this image.
-
-        Parameters
-        ----------
-        pos : galsim.PositionD
-            The position at which to compute the PSF. In zero-indexed
-            pixel coordinates.
-
-        Returns
-        -------
-        psf : galsim.GSObject
-            A representation of the PSF as a galism interpolated image.
-        """
-        x = int(np.clip(pos.x, 0, self.im_width-1))
-        y = int(np.clip(pos.y, 0, self.im_width-1))
-        psf = self.psf_images[y, x].copy()
-        return galsim.InterpolatedImage(galsim.ImageD(psf), scale=self.scale)
 
 
 class RealPSFGenerator(object):
@@ -187,11 +135,10 @@ class RealPSFGenerator(object):
     psf_width : int, optional
         The shape of the PSF image to save to disk. Generally you want this
         to be an odd number and relatively small.
-    grid_spacing : int, optional
-        The spacing of the grid to evaluate the PSF on when saving an array
-        of images of them.
     n_photons : int, optional
         The number of photos to use to draw the PSFs.
+    n_lhs : int, optional
+        The number of points to use the LHS design.
 
     Methods
     -------
@@ -212,13 +159,13 @@ class RealPSFGenerator(object):
             effective_r0_500=0.1,
             im_width=225,
             psf_width=17,
-            grid_spacing=1,
+            n_lhs=512,
             n_photons=5e6):
         self.seed = seed
         self.rng = np.random.RandomState(seed=seed)
         self.base_deviate = galsim.BaseDeviate(self.rng.randint(1, 2**32-1))
         self.scale = scale
-        self.grid_spacing = grid_spacing
+        self.n_lhs = n_lhs
 
         self.exposure_time = exposure_time
         self.lam = lam
@@ -257,47 +204,38 @@ class RealPSFGenerator(object):
             serial execution.
         """
         rng = rng or self.rng
-        locs, npts = _get_locs_npts(self.im_width, self.grid_spacing)
-        seeds = rng.randint(1, 2**32-1, size=npts**2).astype(int)
+        psf_locs = get_optimized_lhs_design(
+            2, self.n_lhs, rng=self.rng) * self.im_width
+        seeds = rng.randint(1, 2**32-1, size=self.n_lhs).astype(int)
         # galsim chokes on numpy int64 types
         seeds = [int(s) for s in seeds]
 
-        pos = []
-        inds = []
-        for iy, y in enumerate(locs):
-            for ix, x in enumerate(locs):
-                pos.append(galsim.PositionD(x=x, y=y))
-                inds.append((iy, ix))
-
         ims = np.zeros(
-            (npts, npts, self.psf_width, self.psf_width),
+            (self.n_lhs, self.psf_width, self.psf_width),
             dtype='f4')
 
         import tqdm
-        for p, s, ind in tqdm.tqdm(zip(pos, seeds, inds), total=len(pos)):
-            x = int(p.x)
-            y = int(p.y)
+        for i, s in tqdm.tqdm(enumerate(seeds), total=self.n_lhs):
             _rng = galsim.BaseDeviate(seed=s)
             psf_im = self.get_rec(
-                row=p.y,
-                col=p.x,
+                row=psf_locs[i, 0],
+                col=psf_locs[i, 1],
                 rng=_rng)
-            ims[inds[0], inds[1]] = psf_im
+            ims[i] = psf_im
 
-        ims = ims.flatten()
         data = np.zeros(1, dtype=[
             ('im_width', 'i8'),
             ('psf_width', 'i8'),
-            ('grid_spacing', 'i8'),
             ('scale', 'f8'),
             ('n_photons', 'f8'),
-            ('flat_image', 'f4', ims.shape[0])])
+            ('images', 'f8', ims.shape),
+            ('locs', 'f8', psf_locs.shape)])
         data['im_width'] = self.im_width
         data['psf_width'] = self.psf_width
-        data['grid_spacing'] = self.grid_spacing
         data['n_photons'] = self.n_photons
         data['scale'] = self.scale
-        data['flat_image'][0] = ims
+        data['images'][0] = ims
+        data['locs'][0] = psf_locs
 
         fitsio.write(filename, data, clobber=True)
 
@@ -316,12 +254,13 @@ class RealPSFGenerator(object):
             serial execution.
         """
         rng = rng or self.rng
-        locs, npts = _get_locs_npts(self.im_width, self.grid_spacing)
-        seeds = rng.randint(1, 2**32-1, size=npts**2).astype(int)
+        psf_locs = get_optimized_lhs_design(
+            2, self.n_lhs, rng=self.rng) * self.im_width
+        seeds = rng.randint(1, 2**32-1, size=self.n_lhs).astype(int)
         # galsim chokes on numpy int64 types
         seeds = [int(s) for s in seeds]
 
-        def _measure_psf(_gen, seeds, xs, ys, ixs, iys):
+        def _measure_psf(_gen, seeds, xs, ys):
             if isinstance(_gen, str):
                 _gen = joblib.load(_gen)
             ims = []
@@ -333,57 +272,45 @@ class RealPSFGenerator(object):
                     col=x,
                     rng=_rng)
                 ims.append(psf_im)
-            return ims, xs, ys, ixs, iys
+            return ims, xs, ys
 
         # call once to create screens
-        _measure_psf(self, [1], [0], [0], [0], [0])
+        _measure_psf(self, [1], [0], [0])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             if n_jobs > 1:
                 # bundle to reduce overheads and predump the data
                 n_per_job = int(np.ceil(
-                    npts * npts / n_jobs))
+                    self.n_lhs / n_jobs))
                 fname = os.path.join(tmpdir, 'data.pkl')
                 joblib.dump(self, fname)
             else:
                 # if we are using 1 core, then compute the phase screens once
-                n_per_job = npts * npts
+                n_per_job = self.n_lhs
                 fname = self
 
-            loc = 0
             jobs = []
             _xs = []
             _ys = []
             _seeds = []
-            _ixs = []
-            _iys = []
-            for iy, y in enumerate(locs):
-                for ix, x in enumerate(locs):
-                    if len(_seeds) < n_per_job:
-                        _xs.append(x)
-                        _ys.append(y)
-                        _seeds.append(seeds[loc])
-                        _ixs.append(ix)
-                        _iys.append(iy)
-                        loc += 1
+            for loc in range(self.n_lhs):
+                if len(_seeds) < n_per_job:
+                    _xs.append(psf_locs[loc, 1])
+                    _ys.append(psf_locs[loc, 0])
+                    _seeds.append(seeds[loc])
 
-                    if len(_seeds) == n_per_job:
-                        jobs.append(
-                            joblib.delayed(_measure_psf)(
-                                fname, _seeds, _xs, _ys, _ixs, _iys))
-                        _xs = []
-                        _ys = []
-                        _seeds = []
-                        _ixs = []
-                        _iys = []
+                if len(_seeds) == n_per_job:
+                    jobs.append(
+                        joblib.delayed(_measure_psf)(
+                            fname, _seeds, _xs, _ys))
+                    _xs = []
+                    _ys = []
+                    _seeds = []
 
             if len(_seeds) > 0:
                 jobs.append(
                     joblib.delayed(_measure_psf)(
-                        fname, _seeds, _xs, _ys, _ixs, _iys))
-
-            # make sure they all get submitted
-            assert loc == npts * npts
+                        fname, _seeds, _xs, _ys))
 
             outputs = joblib.Parallel(
                 verbose=10,
@@ -391,29 +318,31 @@ class RealPSFGenerator(object):
                 pre_dispatch='2*n_jobs')(jobs)
 
         # make sure they all get done
-        assert sum(len(o[0]) for o in outputs) == npts * npts
+        assert sum(len(o[0]) for o in outputs) == self.n_lhs
 
         ims = np.zeros(
-            (npts, npts, self.psf_width, self.psf_width),
+            (self.n_lhs, self.psf_width, self.psf_width),
             dtype='f4')
-        for psfs, _, _, ixs, iys in outputs:
-            for psf, ix, iy in zip(psfs, ixs, iys):
-                ims[iy, ix] = psf
+        loc = 0
+        for psfs, _, _ in outputs:
+            for psf in psfs:
+                ims[loc] = psf
+                loc += 1
+        assert loc == self.n_lhs
 
-        ims = ims.flatten()
         data = np.zeros(1, dtype=[
             ('im_width', 'i8'),
             ('psf_width', 'i8'),
-            ('grid_spacing', 'i8'),
             ('scale', 'f8'),
             ('n_photons', 'f8'),
-            ('flat_image', 'f4', ims.shape[0])])
+            ('images', 'f8', ims.shape),
+            ('locs', 'f8', psf_locs.shape)])
         data['im_width'] = self.im_width
         data['psf_width'] = self.psf_width
-        data['grid_spacing'] = self.grid_spacing
         data['n_photons'] = self.n_photons
         data['scale'] = self.scale
-        data['flat_image'][0] = ims
+        data['images'][0] = ims
+        data['locs'][0] = psf_locs
 
         fitsio.write(filename, data, clobber=True)
 
@@ -587,13 +516,3 @@ def get_good_fft_sizes(sizes):
     ind = np.searchsorted(GOOD_FFT_SIZES, sizes)
     ind = np.clip(ind, 0, len(GOOD_FFT_SIZES)-1)
     return GOOD_FFT_SIZES[ind]
-
-
-def _get_locs_npts(im_width, grid_spacing):
-    npts = im_width / grid_spacing
-    assert npts == int(npts)
-    locs = list(range(0, im_width, grid_spacing))
-    if locs[-1] != im_width - 1:
-        locs += [im_width - 1]
-    npts = len(locs)
-    return locs, npts
