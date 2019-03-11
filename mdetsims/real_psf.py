@@ -278,15 +278,11 @@ class RealPSFGenerator(object):
             x = int(p.x)
             y = int(p.y)
             _rng = galsim.BaseDeviate(seed=s)
-            psf = self.getPSF(p)
-            psf_im = psf.drawImage(
-                    nx=self.psf_width,
-                    ny=self.psf_width,
-                    scale=self.scale,
-                    method='phot',
-                    n_photons=self.n_photons,
-                    rng=_rng)
-            ims[inds[0], inds[1]] = psf_im.array
+            psf_im = self.get_rec(
+                row=p.y,
+                col=p.x,
+                rng=_rng)
+            ims[inds[0], inds[1]] = psf_im
 
         ims = ims.flatten()
         data = np.zeros(1, dtype=[
@@ -332,15 +328,11 @@ class RealPSFGenerator(object):
             import tqdm
             for seed, x, y in tqdm.tqdm(zip(seeds, xs, ys), total=len(seeds)):
                 _rng = galsim.BaseDeviate(seed=seed)
-                psf = _gen.getPSF(galsim.PositionD(x=x, y=y))
-                psf_im = psf.drawImage(
-                        nx=_gen.psf_width,
-                        ny=_gen.psf_width,
-                        scale=_gen.scale,
-                        method='phot',
-                        n_photons=_gen.n_photons,
-                        rng=_rng)
-                ims.append(psf_im.array)
+                psf_im = self.get_rec(
+                    row=y,
+                    col=x,
+                    rng=_rng)
+                ims.append(psf_im)
             return ims, xs, ys, ixs, iys
 
         # call once to create screens
@@ -424,6 +416,55 @@ class RealPSFGenerator(object):
         data['flat_image'][0] = ims
 
         fitsio.write(filename, data, clobber=True)
+
+    def get_rec(self, *, row, col, rng=None, chunk_size=1e5):
+        """Get an image of the PSF at a given (row, col).
+
+        Parameters
+        ----------
+        row : float
+            The row or y-value for the PSF location in zero-indexed image
+            coordinates.
+        col : float
+            The column or x-value for the PSF location in zero-indexed image
+            coordinates.
+        rng : galsim.BaseDeviate or None, optional
+            The galsim RNG to use for photon shooting.
+        chunk_size : float, optional
+            Split the photon shooting in chunks of this size to save
+            memory.
+
+        Returns
+        -------
+        psf : np.ndarray
+            An image of the PSF.
+        """
+        psf = self.getPSF(galsim.PositionD(x=col, y=row))
+
+        n_chunks = int(np.ceil(self.n_photons / chunk_size))
+        im = np.zeros((self.psf_width, self.psf_width))
+        n_done = 0
+
+        for i in range(n_chunks):
+            n_draw = chunk_size
+            if n_done + n_draw > self.n_photons:
+                n_draw = self.n_photons - n_done
+
+            if n_draw <= 0:
+                break
+
+            _im = psf.drawImage(
+                nx=self.psf_width,
+                ny=self.psf_width,
+                scale=self.scale,
+                method='phot',
+                n_photons=n_draw,
+                rng=rng or self.base_deviate).array
+            im += (_im * n_draw / self.n_photons)
+
+            n_done += n_draw
+
+        return im
 
     def getPSF(self, pos):
         """Get a PSF model at a given position.
