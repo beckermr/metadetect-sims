@@ -51,7 +51,7 @@ class RealPSF(object):
 
     def _interp_psf(self):
         # pca
-        nc = min(5, self.psf_locs.shape[0])
+        nc = min(50, self.psf_locs.shape[0])
         self._pca = PCA(n_components=nc)
         yc = self._pca.fit_transform(
             self.psf_images.reshape(self.psf_images.shape[0], -1))

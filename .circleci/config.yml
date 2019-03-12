@@ -50,7 +50,8 @@ jobs:
               pytest \
               fitsio \
               joblib \
-              tqdm
+              tqdm \
+              scikit-learn
             conda update --all -y -q
 
             pip install -e .

@@ -75,7 +75,7 @@ class PowerSpectrumPSF(object):
             logsigma = np.sqrt(logvar)
             return logmean, logsigma
 
-        lm, ls = _getlogmnsigma(0.9, 0.1)
+        lm, ls = _getlogmnsigma(0.8, 0.1)
         self._fwhm_central = np.exp(self._rng.normal() * ls + lm)
 
         ls = 0.005 * variation_factor

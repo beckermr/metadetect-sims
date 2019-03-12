@@ -77,7 +77,7 @@ class Sim(dict):
             n_coadd_psf=None,
             g1=0.02, g2=0.0,
             dim=225, buff=25,
-            noise=1.8e4,
+            noise=180,
             ngal=45.0,
             psf_kws=None,
             homogenize_psf=False):
@@ -228,7 +228,7 @@ class Sim(dict):
             size=2)
 
     def _get_gal_exp(self):
-        flux = 10**(0.4 * (30 - 20))
+        flux = 10**(0.4 * (30 - 18))
         half_light_radius = 0.5
 
         obj = galsim.Sersic(
