@@ -61,7 +61,7 @@ def test_ps_psf_variation(noise_level):
         im_width=120,
         buff=20,
         scale=PIXEL_SCALE,
-        trunc=10,
+        trunc=1,
         noise_level=noise_level)
 
     psf1 = ps.getPSF(galsim.PositionD(x=0, y=0))
