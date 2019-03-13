@@ -19,7 +19,6 @@ def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
     if not np.any(q):
         return None
     g1p = op['wmom_g'][q, 0]
-    g2p = op['wmom_g'][q, 1]
 
     om = res['1m']
     q = (
@@ -29,7 +28,6 @@ def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
     if not np.any(q):
         return None
     g1m = om['wmom_g'][q, 0]
-    g2m = om['wmom_g'][q, 1]
 
     o = res['noshear']
     q = (
@@ -40,6 +38,22 @@ def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
         return None
     g1 = o['wmom_g'][q, 0]
     g2 = o['wmom_g'][q, 1]
+
+    op = res['2p']
+    q = (
+        (op['flags'] == 0) &
+        (op['wmom_s2n'] > s2n_cut) &
+        (op['wmom_T_ratio'] > trat_cut))
+    g2p = op['wmom_g'][q, 1]
+
+    om = res['2m']
+    q = (
+        (om['flags'] == 0) &
+        (om['wmom_s2n'] > s2n_cut) &
+        (om['wmom_T_ratio'] > trat_cut))
+    if not np.any(q):
+        return None
+    g2m = om['wmom_g'][q, 1]
 
     return (
         np.mean(g1p), np.mean(g1m), np.mean(g1),
