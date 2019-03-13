@@ -96,11 +96,11 @@ def _fit_m(prr, mrr):
     for _ in range(10000):
         ind = rng.choice(len(y1), replace=True, size=len(y1))
         mvals.append(np.mean(y1[ind]) / np.mean(x1[ind]) - 1)
-        cvals.append(np.mean(y2[ind]) / np.mean(x2[ind]) - 1)
+        cvals.append(np.mean(y2[ind]) / np.mean(x2[ind]))
 
     return (
         np.mean(y1) / np.mean(x1) - 1, np.std(mvals),
-        np.mean(y2) / np.mean(x2) - 1, np.std(cvals))
+        np.mean(y2) / np.mean(x2), np.std(cvals))
 
 
 def _run_sim_mdet(seed):

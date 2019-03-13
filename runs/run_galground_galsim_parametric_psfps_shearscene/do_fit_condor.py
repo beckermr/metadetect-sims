@@ -21,39 +21,36 @@ def _get_stuff(rr):
     g1p = _a[:, 0]
     g1m = _a[:, 1]
     g1 = _a[:, 2]
+    g2p = _a[:, 3]
+    g2m = _a[:, 4]
+    g2 = _a[:, 5]
 
-    return g1, (g1p - g1m) / 2 / 0.01 * 0.02
+    return (
+        g1, (g1p - g1m) / 2 / 0.01 * 0.02,
+        g2, (g2p - g2m) / 2 / 0.01)
 
 
 def _fit_m(prr, mrr):
-    g1p, R11p = _get_stuff(prr)
-    g1m, R11m = _get_stuff(mrr)
+    g1p, R11p, g2p, R22p = _get_stuff(prr)
+    g1m, R11m, g2m, R22m = _get_stuff(mrr)
 
-    x = R11p + R11m
-    y = g1p - g1m
+    x1 = (R11p + R11m)/2
+    y1 = (g1p - g1m) / 2
 
-    rng = np.random.RandomState(seed=100)
-    mvals = []
-    for _ in tqdm.trange(1000, leave=False):
-        ind = rng.choice(len(y), replace=True, size=len(y))
-        mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
-
-    return np.mean(y) / np.mean(x) - 1, np.std(mvals)
-
-
-def _fit_m_single(prr):
-    g1p, R11p = _get_stuff(prr)
-
-    x = R11p
-    y = g1p
+    x2 = (R22p + R22m) / 2
+    y2 = (g2p + g2m) / 2
 
     rng = np.random.RandomState(seed=100)
     mvals = []
-    for _ in tqdm.trange(1000, leave=False):
-        ind = rng.choice(len(y), replace=True, size=len(y))
-        mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
+    cvals = []
+    for _ in tqdm.trange(500, leave=False):
+        ind = rng.choice(len(y1), replace=True, size=len(y1))
+        mvals.append(np.mean(y1[ind]) / np.mean(x1[ind]) - 1)
+        cvals.append(np.mean(y2[ind]) / np.mean(x2[ind]))
 
-    return np.mean(y) / np.mean(x) - 1, np.std(mvals)
+    return (
+        np.mean(y1) / np.mean(x1) - 1, np.std(mvals),
+        np.mean(y2) / np.mean(x2), np.std(cvals))
 
 
 def _func(fname):
@@ -87,19 +84,15 @@ for i, s2n in enumerate([10, 15, 20]):
     pres, mres = zip(*_outputs)
 
     pres, mres = _cut(pres, mres)
-    mn, msd = _fit_m(pres, mres)
+    m, msd, c, csd = _fit_m(pres, mres)
 
     print('s2n:', s2n)
     print("""\
     # of sims: {n_sims}
-    m       : {mn:f} +/- {msd:f}""".format(
+    m       : {m:f} +/- {msd:f}
+    c       : {c:f} +/- {csd:f}""".format(
         n_sims=len(pres),
-        mn=mn,
-        msd=msd), flush=True)
-
-    mn, msd = _fit_m_single(pres)
-
-    print("""\
-    m single: {mn:f} +/- {msd:f}""".format(
-        mn=mn,
-        msd=msd), flush=True)
+        m=m,
+        msd=msd,
+        c=c,
+        csd=csd), flush=True)
