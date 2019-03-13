@@ -1,6 +1,7 @@
 import sys
 import pickle
 import numpy as np
+import tqdm
 import joblib
 import logging
 
@@ -93,7 +94,7 @@ def _fit_m(prr, mrr):
     rng = np.random.RandomState(seed=100)
     mvals = []
     cvals = []
-    for _ in range(10000):
+    for _ in tqdm.trange(500, leave=False):
         ind = rng.choice(len(y1), replace=True, size=len(y1))
         mvals.append(np.mean(y1[ind]) / np.mean(x1[ind]) - 1)
         cvals.append(np.mean(y2[ind]) / np.mean(x2[ind]))
