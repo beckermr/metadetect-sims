@@ -65,8 +65,9 @@ class Sim(dict):
         'gauss' : a FWHM 0.9 arcsecond Gaussian
         'ps' : a PSF from power spectrum model for shape variation and
             cubic model for size variation
-        'real_psf' : a PSF drawn randomly from a model of the atmosphere
+        'real' : a PSF model drawn randomly from a model of the atmosphere
             and optics in a set of files
+        'piff' : a PSF model drawn randomly from a set of piff files
     """
     def __init__(
             self, *,
@@ -342,6 +343,32 @@ class Sim(dict):
 
         return psf, psf_im
 
+    def _stack_piff_psfs(self, *, x, y, filenames):
+        # import so we don't require piff to run the code
+        import piff
+
+        if not hasattr(self, '_psfs'):
+            fnames = self.rng.choice(
+                filenames, size=self.n_coadd_psf, replace=False)
+            self._psfs = [piff.PSF.read(fname) for fname in fnames]
+
+        wcs = self._get_local_jacobian(x=x, y=y)
+
+        image = galsim.ImageD(ncol=17, nrow=17, wcs=wcs)
+        for psf in self._psfs:
+            _image = galsim.ImageD(ncol=17, nrow=17, wcs=wcs)
+            _image = psf.draw(
+                x=int(x+0.5),
+                y=int(y+0.5),
+                image=_image)
+            image += _image
+        psf_im = image.array
+        psf_im /= np.sum(psf_im)
+
+        psf = galsim.InterpolatedImage(galsim.ImageD(psf_im), wcs=wcs)
+
+        return psf, psf_im
+
     def _render_psf_image(self, *, x, y):
         """Render the PSF image.
 
@@ -369,9 +396,13 @@ class Sim(dict):
             kws = self.psf_kws or {}
             psf, psf_im = self._stack_ps_psfs(x=x, y=y, **kws)
             method = 'auto'
-        elif self.psf_type == 'real_psf':
+        elif self.psf_type == 'real':
             kws = self.psf_kws or {}
             psf, psf_im = self._stack_real_psfs(x=x, y=y, **kws)
+            method = 'no_pixel'
+        elif self.psf_type == 'piff':
+            kws = self.psf_kws or {}
+            psf, psf_im = self._stack_piff_psfs(x=x, y=y, **kws)
             method = 'no_pixel'
         else:
             raise ValueError('psf_type "%s" not valid!' % self.psf_type)
