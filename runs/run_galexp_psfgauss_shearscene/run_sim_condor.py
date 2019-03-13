@@ -19,6 +19,7 @@ def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
     if not np.any(q):
         return None
     g1p = op['wmom_g'][q, 0]
+    g2p = op['wmom_g'][q, 1]
 
     om = res['1m']
     q = (
@@ -28,6 +29,7 @@ def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
     if not np.any(q):
         return None
     g1m = om['wmom_g'][q, 0]
+    g2m = om['wmom_g'][q, 1]
 
     o = res['noshear']
     q = (
@@ -37,8 +39,11 @@ def _meas_shear(res, s2n_cut=10, trat_cut=1.2):
     if not np.any(q):
         return None
     g1 = o['wmom_g'][q, 0]
+    g2 = o['wmom_g'][q, 1]
 
-    return np.mean(g1p), np.mean(g1m), np.mean(g1)
+    return (
+        np.mean(g1p), np.mean(g1m), np.mean(g1),
+        np.mean(g2p), np.mean(g2m), np.mean(g2))
 
 
 def _run_sim_mdet(seed):

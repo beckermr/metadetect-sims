@@ -34,20 +34,25 @@ def _meas_shear(res):
     if not np.any(q):
         return None
     g1p = op['wmom_g'][q, 0]
+    g2p = op['wmom_g'][q, 1]
 
     om = res['1m']
     q = (om['flags'] == 0) & (om['wmom_s2n'] > 10) & (om['wmom_T_ratio'] > 1.2)
     if not np.any(q):
         return None
     g1m = om['wmom_g'][q, 0]
+    g2m = om['wmom_g'][q, 1]
 
     o = res['noshear']
     q = (o['flags'] == 0) & (o['wmom_s2n'] > 10) & (o['wmom_T_ratio'] > 1.2)
     if not np.any(q):
         return None
     g1 = o['wmom_g'][q, 0]
+    g2 = o['wmom_g'][q, 1]
 
-    return np.mean(g1p), np.mean(g1m), np.mean(g1)
+    return (
+        np.mean(g1p), np.mean(g1m), np.mean(g1),
+        np.mean(g2p), np.mean(g2m), np.mean(g2))
 
 
 def _cut(prr, mrr):
@@ -66,39 +71,36 @@ def _get_stuff(rr):
     g1p = _a[:, 0]
     g1m = _a[:, 1]
     g1 = _a[:, 2]
+    g2p = _a[:, 3]
+    g2m = _a[:, 4]
+    g2 = _a[:, 5]
 
-    return g1, (g1p - g1m) / 2 / 0.01 * 0.02
+    return (
+        g1, (g1p - g1m) / 2 / 0.01 * 0.02,
+        g2, (g2p - g2m) / 2 / 0.01)
 
 
 def _fit_m(prr, mrr):
-    g1p, R11p = _get_stuff(prr)
-    g1m, R11m = _get_stuff(mrr)
+    g1p, R11p, g2p, R22p = _get_stuff(prr)
+    g1m, R11m, g2m, R22m = _get_stuff(mrr)
 
-    x = (R11p + R11m)/2
-    y = (g1p - g1m)/2
+    x1 = (R11p + R11m)/2
+    y1 = (g1p - g1m) / 2
 
-    rng = np.random.RandomState(seed=100)
-    mvals = []
-    for _ in range(10000):
-        ind = rng.choice(len(y), replace=True, size=len(y))
-        mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
-
-    return np.mean(y) / np.mean(x) - 1, np.std(mvals)
-
-
-def _fit_m_single(prr):
-    g1p, R11p = _get_stuff(prr)
-
-    x = R11p
-    y = g1p
+    x2 = (R22p + R22m) / 2
+    y2 = (g2p + g2m) / 2
 
     rng = np.random.RandomState(seed=100)
     mvals = []
+    cvals = []
     for _ in range(10000):
-        ind = rng.choice(len(y), replace=True, size=len(y))
-        mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
+        ind = rng.choice(len(y1), replace=True, size=len(y1))
+        mvals.append(np.mean(y1[ind]) / np.mean(x1[ind]) - 1)
+        cvals.append(np.mean(y2[ind]) / np.mean(x2[ind]))
 
-    return np.mean(y) / np.mean(x) - 1, np.std(mvals)
+    return (
+        np.mean(y1) / np.mean(x1) - 1, np.std(mvals),
+        np.mean(y2) / np.mean(x2), np.std(cvals))
 
 
 def _run_sim_mdet(seed):
@@ -168,18 +170,14 @@ if rank == 0:
                 pres.extend(data[0])
                 mres.extend(data[1])
 
-    mn, msd = _fit_m(pres, mres)
+    m, msd, c, csd = _fit_m(pres, mres)
 
     print("""\
 # of sims: {n_sims}
-noise cancel m   : {mn:f} +/- {msd:f}""".format(
+noise cancel m   : {m:f} +/- {msd:f}
+noise cancel c   : {c:f} +/- {csd:f}""".format(
         n_sims=len(pres),
-        mn=mn,
-        msd=msd), flush=True)
-
-    mn, msd = _fit_m_single(pres)
-
-    print("""\
-no noise cancel m: {mn:f} +/- {msd:f}""".format(
-        mn=mn,
-        msd=msd), flush=True)
+        m=m,
+        msd=msd,
+        c=c,
+        csd=csd), flush=True)

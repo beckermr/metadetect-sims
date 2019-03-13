@@ -15,7 +15,8 @@ fi
 
 source activate bnl
 
-echo `which python`
+# change to correct dir just to be sure
+cd $3/..
 
 # about 1 to 1.6 hours per job
 # args are nsims, seed, odir
