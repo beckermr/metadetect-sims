@@ -34,6 +34,24 @@ def _fit_m(prr, mrr):
     g1p, R11p, g2p, R22p = _get_stuff(prr)
     g1m, R11m, g2m, R22m = _get_stuff(mrr)
 
+    msk = (
+        np.isfinite(g1p) &
+        np.isfinite(R11p) & 
+        np.isfinite(g1m) &
+        np.isfinite(R11m) &         
+        np.isfinite(g2p) &
+        np.isfinite(R22p) & 
+        np.isfinite(g2m) &
+        np.isfinite(R22m))
+    g1p = g1p[msk]
+    R11p = R11p[msk]
+    g1m = g1m[msk]
+    R11m = R11m[msk]
+    g2p = g2p[msk]
+    R22p = R22p[msk]
+    g2m = g2m[msk]
+    R22m = R22m[msk]
+
     x1 = (R11p + R11m)/2
     y1 = (g1p - g1m) / 2
 
