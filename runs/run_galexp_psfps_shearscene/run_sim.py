@@ -115,24 +115,27 @@ def _fit_m(prr, mrr):
 
 
 def _run_sim_mdet(seed):
-    config = {}
-    config.update(TEST_METADETECT_CONFIG)
+    try:
+        config = {}
+        config.update(TEST_METADETECT_CONFIG)
 
-    rng = np.random.RandomState(seed=seed + 1000000)
-    mbobs = Sim(
-        rng=rng, g1=0.02, **CONFIG).get_mbobs()
-    md = Metadetect(config, mbobs, rng)
-    md.go()
-    pres = _meas_shear(md.result)
+        rng = np.random.RandomState(seed=seed + 1000000)
+        mbobs = Sim(
+            rng=rng, g1=0.02, **CONFIG).get_mbobs()
+        md = Metadetect(config, mbobs, rng)
+        md.go()
+        pres = _meas_shear(md.result)
 
-    rng = np.random.RandomState(seed=seed + 1000000)
-    mbobs = Sim(
-        rng=rng, g1=-0.02, **CONFIG).get_mbobs()
-    md = Metadetect(config, mbobs, rng)
-    md.go()
-    mres = _meas_shear(md.result)
+        rng = np.random.RandomState(seed=seed + 1000000)
+        mbobs = Sim(
+            rng=rng, g1=-0.02, **CONFIG).get_mbobs()
+        md = Metadetect(config, mbobs, rng)
+        md.go()
+        mres = _meas_shear(md.result)
 
-    return pres, mres
+        return pres, mres
+    except Exception:
+        return None, None
 
 
 print('running metadetect', flush=True)
