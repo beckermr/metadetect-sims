@@ -34,7 +34,7 @@ Image_Size       =  1000000
 
 """
 
-N_PATCHES_PER_JOB = 200
+N_PATCHES_PER_JOB = 50
 
 
 def _append_job(fp, num, output_dir):
