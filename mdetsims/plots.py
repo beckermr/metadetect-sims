@@ -43,15 +43,16 @@ def plot_psf_model(fwhms, g1, g2, im_width, axs):
     axs[0, 0].set_ylabel('row')
     axs[0, 0].set_title('FWHM')
 
+    nmod = 10
     g = np.sqrt(g1**2 + g2**2)
     g /= np.mean(g)
     loc = np.linspace(0, im_width, n)
     beta = np.arctan2(g2, g1)/2
     axs[0, 1].quiver(
-        loc[::5],
-        loc[::5],
-        (g * np.cos(beta))[::5, ::5],
-        (g * np.sin(beta))[::5, ::5],
+        loc[::nmod],
+        loc[::nmod],
+        (g * np.cos(beta))[::nmod, ::nmod],
+        (g * np.sin(beta))[::nmod, ::nmod],
         scale_units='xy',
         scale=0.075,
         headwidth=0,

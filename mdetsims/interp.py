@@ -13,10 +13,6 @@ def _interp_image(*, image, good_msk, bad_msk, yx):
     return interp_image
 
 
-def _draw_noise_image(*, weight, rng):
-    return rng.normal(size=weight.shape) * np.sqrt(1.0/weight)
-
-
 def _interp_patch(*, image, bad_msk, i, j, size, buff):
     # total patch bounds and size
     ilow = max([i * size - buff, 0])
@@ -134,63 +130,38 @@ def _grid_interp(*, image, bad_msk):
 
 
 def interpolate_image_and_noise(
-        *, image, weight, bmask, bad_flags, rng, noise=None):
-    """Interpolate an image using the
-    `scipy.interpolate.CloughTocher2DInterpolator`. An interpolated noise
-    field is returned as well.
+        *, image, noise, bad_mask, rng):
+    """Interpolate an image and a noise field using the
+    `scipy.interpolate.CloughTocher2DInterpolator`.
 
     Parameters
     ----------
     image : array-like
         The image to interpolate.
-    weight : array-like
-        The weight map of the image to interpolate.
-    bmask : array-like
-        The bit mask for the slice.
-    bad_flags : int
-        Pixels with in the bit mask using
-        `(bmask & bad_flags) != 0`.
+    noise : array-like
+        The noise field to interpolate.
+    bad_mask : array-like
+        A boolean mask indicating which pixels to interpolate.
     rng : `numpy.random.RandomState`
         An RNG instance to use.
-    noise : array-like, optional
-        Specify directly the noise field instead of using `rng` to generate
-        one.
 
     Returns
     -------
     interp_image : array-like
         The interpolated image.
-    interp_weight : array-like
-        The interpolated weight map.
+    interp_noise : array-like
+        The interpolated noise image.
     """
-    bad_msk = (weight <= 0) | ((bmask & bad_flags) != 0)
-
-    if np.any(bad_msk):
-        good_msk = ~bad_msk
-
-        interp_image = _grid_interp(image=image, bad_msk=bad_msk)
+    if np.any(bad_mask):
+        interp_image = _grid_interp(image=image, bad_msk=bad_mask)
         if interp_image is None:
             return None, None
 
-        if noise is None:
-            # fill the weight map with the median so we can draw a noise map
-            # we could apply the interpolator too?
-            interp_weight = weight.copy()
-            if np.any(interp_weight[bad_msk] == 0):
-                interp_weight[bad_msk] = np.median(interp_weight[good_msk])
-
-            # now draw a noise map and apply an interp to it
-            # this is to propagate how the interpolation correlates pixel noise
-            # so it has to be done to the noise map
-            noise = _draw_noise_image(weight=interp_weight, rng=rng)
-
-        interp_noise = _grid_interp(image=noise, bad_msk=bad_msk)
+        interp_noise = _grid_interp(image=noise, bad_msk=bad_mask)
         if interp_noise is None:
             return None, None
 
         return interp_image, interp_noise
     else:
         # return a copy here since the caller expects new images
-        if noise is None:
-            noise = _draw_noise_image(weight=weight, rng=rng)
-        return image.copy(), noise
+        return image.copy(), noise.copy()

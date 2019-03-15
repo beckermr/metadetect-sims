@@ -1,123 +1,68 @@
-import pytest
 import numpy as np
 from ..interp import interpolate_image_and_noise
 
 
-@pytest.mark.parametrize('use_rng', [True, False])
-def test_interpolate_image_and_noise_weight(use_rng):
+def test_interpolate_image_and_noise():
     # linear image interp should be perfect for regions smaller than the
     # patches used for interpolation
     y, x = np.mgrid[0:100, 0:100]
     image = (10 + x*5).astype(np.float32)
-    weight = np.ones_like(image)
-    bmask = np.zeros_like(image, dtype=np.int32)
-    bad_flags = 0
-    rng = np.random.RandomState(seed=42)
-    weight[30:35, 40:45] = 0.0
+    bad_mask = np.zeros_like(image, dtype=np.int32)
+    bad_mask[30:35, 40:45] = 1
+    bad_mask = bad_mask.astype(bool)
+
+    rng = np.random.RandomState(seed=422)
+    noise = rng.normal(size=image.shape)
 
     # put nans here to make sure interp is done ok
-    msk = weight <= 0
-    image[msk] = np.nan
+    image[bad_mask] = np.nan
+    noise[bad_mask] = np.nan
 
-    if use_rng:
-        iimage, inoise = interpolate_image_and_noise(
+    rng = np.random.RandomState(seed=42)
+    iimage, inoise = interpolate_image_and_noise(
             image=image,
-            weight=weight,
-            bmask=bmask,
-            bad_flags=bad_flags,
+            noise=noise,
+            bad_mask=bad_mask,
             rng=rng)
-    else:
-        rng = np.random.RandomState(seed=42)
-        noise = rng.normal(size=image.shape)
-        iimage, inoise = interpolate_image_and_noise(
-            image=image,
-            weight=weight,
-            bmask=bmask,
-            bad_flags=bad_flags,
-            rng=None,  # this will cause an error if the RNG is called
-            noise=noise)
 
     assert np.allclose(iimage, 10 + x*5)
+    assert np.all(np.isfinite(iimage))
+    assert np.all(np.isfinite(inoise))
 
     # make sure noise field was inteprolated
-    rng = np.random.RandomState(seed=42)
+    rng = np.random.RandomState(seed=422)
     noise = rng.normal(size=image.shape)
-    assert not np.allclose(noise[msk], inoise[msk])
-    assert np.allclose(noise[~msk], inoise[~msk])
-
-
-@pytest.mark.parametrize('use_rng', [True, False])
-def test_interpolate_image_and_noise_bmask(use_rng):
-    # linear image interp should be perfect for regions smaller than the
-    # patches used for interpolation
-    y, x = np.mgrid[0:100, 0:100]
-    image = (10 + x*5).astype(np.float32)
-    weight = np.ones_like(image)
-    bmask = np.zeros_like(image, dtype=np.int32)
-    bad_flags = 1
-
-    rng = np.random.RandomState(seed=42)
-    bmask[30:35, 40:45] = 1
-    bmask[:, 0] = 2
-    bmask[:, -1] = 4
-
-    # put nans here to make sure interp is done ok
-    msk = (bmask & bad_flags) != 0
-    image[msk] = np.nan
-
-    if use_rng:
-        iimage, inoise = interpolate_image_and_noise(
-            image=image,
-            weight=weight,
-            bmask=bmask,
-            bad_flags=bad_flags,
-            rng=rng)
-    else:
-        rng = np.random.RandomState(seed=42)
-        noise = rng.normal(size=image.shape)
-        iimage, inoise = interpolate_image_and_noise(
-            image=image,
-            weight=weight,
-            bmask=bmask,
-            bad_flags=bad_flags,
-            rng=None,  # this will cause an error if the RNG is called
-            noise=noise)
-
-    assert np.allclose(iimage, 10 + x*5)
-
-    # make sure noise field was inteprolated
-    rng = np.random.RandomState(seed=42)
-    noise = rng.normal(size=image.shape)
-    assert not np.allclose(noise[msk], inoise[msk])
-    assert np.allclose(noise[~msk], inoise[~msk])
+    assert not np.allclose(noise[bad_mask], inoise[bad_mask])
+    assert np.allclose(noise[~bad_mask], inoise[~bad_mask])
 
 
 def test_interpolate_image_and_noise_big_missing():
     y, x = np.mgrid[0:100, 0:100]
     image = (10 + x*5).astype(np.float32)
-    weight = np.ones_like(image)
-    bmask = np.zeros_like(image, dtype=np.int32)
-    bad_flags = 1
+    bad_mask = np.zeros_like(image, dtype=np.int32)
+    bad_mask[15:80, 15:80] = 1
+    bad_mask = bad_mask.astype(bool)
 
-    rng = np.random.RandomState(seed=42)
-    bmask[15:80, 15:80] = 1
+    rng = np.random.RandomState(seed=422)
+    noise = rng.normal(size=image.shape)
 
     # put nans here to make sure interp is done ok
-    msk = (bmask & bad_flags) != 0
-    image[msk] = np.nan
+    image[bad_mask] = np.nan
+    noise[bad_mask] = np.nan
 
+    rng = np.random.RandomState(seed=42)
     iimage, inoise = interpolate_image_and_noise(
         image=image,
-        weight=weight,
-        bmask=bmask,
-        bad_flags=bad_flags,
+        noise=noise,
+        bad_mask=bad_mask,
         rng=rng)
 
     # interp will be waaay off but shpuld have happened
     assert np.all(np.isfinite(iimage))
+    assert np.all(np.isfinite(inoise))
 
     # make sure noise field was inteprolated
-    rng = np.random.RandomState(seed=42)
+    rng = np.random.RandomState(seed=422)
     noise = rng.normal(size=image.shape)
-    assert not np.allclose(noise[msk], inoise[msk])
-    assert np.allclose(noise[~msk], inoise[~msk])
+    assert not np.allclose(noise[bad_mask], inoise[bad_mask])
+    assert np.allclose(noise[~bad_mask], inoise[~bad_mask])

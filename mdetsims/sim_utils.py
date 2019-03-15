@@ -1,11 +1,18 @@
+import logging
+import os
+
 import numpy as np
+
 import ngmix
 import galsim
-import logging
+import fitsio
 
 from .psf_homogenizer import PSFHomogenizer
 from .ps_psf import PowerSpectrumPSF
 from .real_psf import RealPSF
+from .masking import generate_bad_columns, generate_cosmic_rays
+from .interp import interpolate_image_and_noise
+from .symmetrize import symmetrize_bad_mask
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,8 +50,26 @@ class Sim(dict):
         The number of objects to simulate per arcminute.
     psf_kws : dict or None, optional
         Extra keyword arguments to pass to the constructors for PSF objects.
+        See the doc strings of the PSF objects `PowerSpectrumPSF` and `RealPSF`
+        for details.
+    gal_kws : dict or None, optional
+        Extra keyword arguments to use when building galaxy objects.
+
+        For gal_type == 'wldeblend', these keywords can be
+
+            'survey_name' : str
+                The name of survey in all caps, e.g. 'DES', 'LSST'.
+            'catalog' : str
+                A path to the catalog to draw from. If this keyword is not
+                given, you need to have the one square degree catsim catalog
+                in the current working directory or in the directory given by
+                the environment variable 'CATSIM_DIR'.
+
     homogenize_psf : bool, optional
         Apply PSF homogenization to the image.
+    mask_and_interp : bool, optional
+        Apply fake pixel masking for bad columns and cosmic rays and then
+        interpolate them.
 
     Methods
     -------
@@ -59,6 +84,8 @@ class Sim(dict):
 
         'exp' : Sersic objects at very high s/n with n = 1
         'ground_galsim_parametric' : a typical ground-based sample
+            from the galsim COSMOS catalog
+        'wldeblend' : a sample drawn from the WeakLensingDeblending package
 
     The valid kinds of PSFs are
 
@@ -81,8 +108,11 @@ class Sim(dict):
             noise=180,
             ngal=45.0,
             psf_kws=None,
-            homogenize_psf=False):
+            gal_kws=None,
+            homogenize_psf=False,
+            mask_and_interp=False):
         self.rng = rng
+        self.noise_rng = np.random.RandomState(seed=rng.randint(1, 2**32-1))
         self.gal_type = gal_type
         self.psf_type = psf_type
         self.n_coadd = n_coadd
@@ -95,8 +125,10 @@ class Sim(dict):
         self.ngal = ngal
         self.im_cen = (dim - 1) / 2
         self.psf_kws = psf_kws
+        self.gal_kws = gal_kws
         self.n_coadd_psf = n_coadd_psf or n_coadd
         self.homogenize_psf = homogenize_psf
+        self.mask_and_interp = mask_and_interp
 
         self._galsim_rng = galsim.BaseDeviate(
             seed=self.rng.randint(low=1, high=2**32-1))
@@ -111,16 +143,89 @@ class Sim(dict):
         # half of the width of center of the patch that has objects
         self.pos_width = self.dim * frac * 0.5 * self.pixelscale
 
-        # compute number of objects
-        # we have a default of approximately 80000 objects per 10k x 10k coadd
-        # this sim dims[0] * dims[1] but we only use frac * frac of the area
-        # so the number of things we want is
-        # dims[0] * dims[1] / 1e4^2 * 80000 * frac * frac
+        # for wldeblend galaxies, we have to adjust some of the input
+        # parameters since they are computed self consisently from the
+        # input catalog and/or package defaults
+        if self.gal_type == 'wldeblend':
+            self._extra_init_for_wldeblend()
+
+        # given the input number of objects to simulate per square arcminute,
+        # compute the number we actually need
         self.nobj = int(
             self.ngal *
             (self.dim * self.pixelscale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
+
+    def _extra_init_for_wldeblend(self):
+        # gaurd the import here
+        import descwl
+
+        # make sure to find the proper catalog
+        gal_kws = self.gal_kws or {}
+        if 'catalog' not in gal_kws:
+            fname = os.path.join(
+                os.environ.get('CATSIM_DIR', '.'),
+                'OneDegSq.fits')
+        else:
+            fname = gal_kws['catalog']
+
+        self._wldeblend_cat = fitsio.read(fname)
+        self._wldeblend_cat['pa_disk'] = self.rng.uniform(
+            low=0.0, high=360.0, size=self._wldeblend_cat.size)
+        self._wldeblend_cat['pa_bulge'] = self._wldeblend_cat['pa_disk']
+
+        # set the survey name and exposure times
+        if 'survey_name' not in gal_kws:
+            survey_name = 'DES'
+        else:
+            survey_name = gal_kws['survey_name']
+
+        if survey_name == 'DES':
+            exptime = 90
+        elif survey_name == 'LSST':
+            exptime = 15
+        else:
+            exptime = None
+
+        # make the survey and code to build galaxies from it
+        pars = descwl.survey.Survey.get_defaults(
+            survey_name=survey_name,
+            filter_band='i')  # always i band!
+
+        pars['survey_name'] = survey_name
+        pars['filter_band'] = 'i'
+
+        # note in the way we call the descwl package, the image width
+        # and height is not actually used
+        pars['image_width'] = self.dim
+        pars['image_height'] = self.dim
+
+        # the psf not actually used for anything given how we call the
+        # descwl package
+        pars['psf_model'] = galsim.Gaussian(fwhm=0.7)
+
+        # we fix the exposure time and adjust the noise
+        pars['exposure_time'] = exptime * self.n_coadd
+
+        self._survey = descwl.survey.Survey(**pars)
+        self._builder = descwl.model.GalaxyBuilder(
+            survey=self._survey,
+            no_disk=False,
+            no_bulge=False,
+            no_agn=False,
+            verbose_model=False)
+
+        # now we reset the noise using the internal sky level appropriate
+        # for the internal units
+        self.noise = np.sqrt(self._survey.mean_sky_level)
+
+        # when we sample from the catalog, we need to pull the right number
+        # of objects. Since the default catalog is one square degree
+        # and we fill a fraction of the image, we need to set the
+        # base source density `ngal`. This is in units of number per
+        # square arcminute.
+        self.ngal = self._wldeblend_cat.size / (60 * 60)
 
     def get_mbobs(self):
         """Make a simulated MultiBandObsList for metadetect.
@@ -171,10 +276,13 @@ class Sim(dict):
 
         im = im.array.copy()
 
-        im += self.rng.normal(scale=self.noise, size=im.shape)
+        im += self.noise_rng.normal(scale=self.noise, size=im.shape)
         wt = im*0 + 1.0/self.noise**2
         bmask = np.zeros(im.shape, dtype='i4')
-        noise = self.rng.normal(size=im.shape) / np.sqrt(wt)
+        noise = self.noise_rng.normal(size=im.shape) / np.sqrt(wt)
+
+        if self.mask_and_interp:
+            im, noise, bmask = self._mask_and_interp(im, noise)
 
         galsim_jac = self._get_local_jacobian(x=self.im_cen, y=self.im_cen)
 
@@ -203,7 +311,28 @@ class Sim(dict):
 
         return mbobs
 
+    def _mask_and_interp(self, image, noise):
+        LOGGER.debug('applying masking and interpolation')
+
+        # here we make the mask
+        bad_mask = generate_bad_columns(image.shape, rng=self.noise_rng)
+        bad_mask |= generate_cosmic_rays(image.shape, rng=self.noise_rng)
+
+        # applies a 90 degree rotation to make it symmetric
+        symmetrize_bad_mask(bad_mask)
+
+        # now we inteprolate the pixels in the noise and image field
+        # that are masked
+        _im, _nse = interpolate_image_and_noise(
+            image=image,
+            noise=noise,
+            bad_mask=bad_mask,
+            rng=self.noise_rng)
+
+        return _im, _nse, bad_mask.astype(np.int32)
+
     def _homogenize_psf(self, im, noise):
+        LOGGER.info('applying PSF homogenization')
 
         def _func(row, col):
             psf_im, _, _, _, _ = self._render_psf_image(
@@ -227,6 +356,9 @@ class Sim(dict):
             low=-self.pos_width,
             high=self.pos_width,
             size=2)
+
+    def _get_nobj(self):
+        return self.rng.poisson(self.nobj)
 
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
@@ -255,6 +387,18 @@ class Sim(dict):
         )
         return gal
 
+    def _get_gal_wldeblend(self):
+        rind = self.rng.choice(self._wldeblend_cat.size)
+        angle = self.rng.uniform() * 360
+
+        gal = self._builder.from_catalog(
+            self._wldeblend_cat[rind], 0, 0, self._survey.filter_band).model
+
+        # apply an extra rotation
+        gal = gal.rotate(angle * galsim.degrees)
+
+        return gal
+
     def _get_band_objects(self):
         """Get a list of effective PSF-convolved galsim images w/ their
         offsets in the image.
@@ -269,7 +413,9 @@ class Sim(dict):
         all_band_obj = []
         positions = []
 
-        for i in range(self.nobj):
+        nobj = self._get_nobj()
+
+        for i in range(nobj):
             # unsheared offset from center of image
             dx, dy = self._get_dxdy()
 
@@ -278,6 +424,8 @@ class Sim(dict):
                 gal = self._get_gal_exp()
             elif self.gal_type == 'ground_galsim_parametric':
                 gal = self._get_gal_ground_galsim_parametric()
+            elif self.gal_type == 'wldeblend':
+                gal = self._get_gal_wldeblend()
             else:
                 raise ValueError('gal_type "%s" not valid!' % self.gal_type)
 

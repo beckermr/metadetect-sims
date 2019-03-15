@@ -28,6 +28,8 @@ class PowerSpectrumPSF(object):
         PSF shape power spectra and the change in the PSF size across the
         image. Setting this factor greater than 1 results in more variation
         and less than 1 results in less variation.
+    median_seeing : float, optional
+        The approximate median seeing for the PSF.
 
     Methods
     -------
@@ -36,7 +38,8 @@ class PowerSpectrumPSF(object):
     """
     def __init__(self, *,
                  rng, im_width, buff, scale, trunc=1,
-                 noise_level=None, variation_factor=1):
+                 noise_level=None, variation_factor=1,
+                 median_seeing=0.8):
         self._rng = rng
         self._im_cen = (im_width - 1)/2
         self._scale = scale
@@ -45,6 +48,7 @@ class PowerSpectrumPSF(object):
         self._noise_level = noise_level
         self._buff = buff
         self._variation_factor = variation_factor
+        self._median_seeing = median_seeing
 
         # set the power spectrum and PSF params
         # Heymans et al, 2012 found L0 ~= 3 arcmin, given as 180 arcsec here.
@@ -75,7 +79,7 @@ class PowerSpectrumPSF(object):
             logsigma = np.sqrt(logvar)
             return logmean, logsigma
 
-        lm, ls = _getlogmnsigma(0.8, 0.1)
+        lm, ls = _getlogmnsigma(self._median_seeing, 0.1)
         self._fwhm_central = np.exp(self._rng.normal() * ls + lm)
 
         ls = 0.005 * variation_factor

@@ -49,6 +49,9 @@ class GridPSPSFSim(Sim):
 
         return obj
 
+    def _get_nobj(self):
+        return self.nobj
+
 
 def _get_fwhm_g1g2(im):
     mom = galsim.hsm.FindAdaptiveMom(im)

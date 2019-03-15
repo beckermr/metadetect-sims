@@ -9,7 +9,12 @@ from mdetsims import Sim, TEST_METADETECT_CONFIG
 from metadetect.metadetect import Metadetect
 from config import CONFIG
 
-logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+for lib in ['ngmix', 'metadetect', 'mdetsims']:
+    lgr = logging.getLogger(lib)
+    hdr = logging.StreamHandler(sys.stdout)
+    hdr.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+    lgr.setLevel(logging.DEBUG)
+    lgr.addHandler(hdr)
 
 try:
     from mpi4py import MPI
@@ -147,7 +152,7 @@ offset = rank * n_sims
 sims = [joblib.delayed(_run_sim_mdet)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
     verbose=20,
-    n_jobs=-1,
+    n_jobs=-1 if n_sims > 1 else 1,
     pre_dispatch='2*n_jobs',
     max_nbytes=None)(sims)
 
