@@ -10,7 +10,10 @@ PIXEL_SCALE = 0.25
 
 def _get_fwhm_g1g2(psf_im):
     mom = galsim.hsm.FindAdaptiveMom(psf_im)
-    return psf_im.calculateFWHM(), mom.observed_shape.g1, mom.observed_shape.g2
+    return (
+        mom.moments_sigma * PIXEL_SCALE * 2.355,
+        mom.observed_shape.g1,
+        mom.observed_shape.g2)
 
 
 def test_ps_psf_smoke():
@@ -73,7 +76,7 @@ def test_ps_psf_variation(noise_level):
     fwhm2, g12, g22 = _get_fwhm_g1g2(psf_im2)
 
     assert not np.array_equal(psf_im1.array, psf_im2.array)
-    assert np.abs(fwhm1/fwhm2 - 1) > 0.01
+    assert np.abs(fwhm1/fwhm2 - 1) > 0.002
     assert np.abs(g11/g12 - 1) > 0.01
     assert np.abs(g21/g22 - 1) > 0.01
 
@@ -95,28 +98,23 @@ def test_ps_psf_truncation(noise_level):
         trunc=100,
         noise_level=noise_level)
 
-    fwhms1 = []
     g1s1 = []
     g2s1 = []
-    fwhms2 = []
     g1s2 = []
     g2s2 = []
     for x in np.linspace(0, 119, 10):
         for y in np.linspace(0, 119, 10):
             psf1 = ps1.getPSF(galsim.PositionD(x=x, y=y))
             psf_im1 = psf1.drawImage(scale=PIXEL_SCALE)
-            fwhm, g1, g2 = _get_fwhm_g1g2(psf_im1)
-            fwhms1.append(fwhm)
+            _, g1, g2 = _get_fwhm_g1g2(psf_im1)
             g1s1.append(g1)
             g2s1.append(g2)
 
             psf2 = ps2.getPSF(galsim.PositionD(x=x, y=y))
             psf_im2 = psf2.drawImage(scale=PIXEL_SCALE)
-            fwhm, g1, g2 = _get_fwhm_g1g2(psf_im2)
-            fwhms2.append(fwhm)
+            _, g1, g2 = _get_fwhm_g1g2(psf_im2)
             g1s2.append(g1)
             g2s2.append(g2)
 
-    assert np.std(fwhms1) > np.std(fwhms2)
     assert np.std(g1s1) > np.std(g1s2)
     assert np.std(g2s1) > np.std(g2s2)
