@@ -463,6 +463,7 @@ class Sim(dict):
                     scale=self.pixelscale,
                     **kwargs)
                 for _ in range(self.n_coadd_psf)]
+            LOGGER.debug('stacking %d power spectrum psfs', self.n_coadd_psf)
 
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
@@ -479,6 +480,7 @@ class Sim(dict):
             fnames = self.rng.choice(
                 filenames, size=self.n_coadd_psf, replace=False)
             self._psfs = [RealPSF(fname) for fname in fnames]
+            LOGGER.debug('stacking %d real psfs', self.n_coadd_psf)
 
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
@@ -499,6 +501,7 @@ class Sim(dict):
             fnames = self.rng.choice(
                 filenames, size=self.n_coadd_psf, replace=False)
             self._psfs = [piff.PSF.read(fname) for fname in fnames]
+            LOGGER.debug('stacking %d piff psfs', self.n_coadd_psf)
 
         wcs = self._get_local_jacobian(x=x, y=y)
 

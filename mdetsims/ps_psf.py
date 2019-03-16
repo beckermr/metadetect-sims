@@ -61,12 +61,13 @@ class PowerSpectrumPSF(object):
         gs = max(self._tot_width * self._scale / ng, 1)
         self.ng = ng
         self.gs = gs
+        seed = self._rng.randint(1, 2**30)
         self._ps.buildGrid(
             grid_spacing=gs,
             ngrid=ng,
             get_convergence=True,
-            variance=(0.02 * variation_factor)**2,
-            rng=galsim.BaseDeviate(self._rng.randint(1, 2**30)))
+            variance=(0.01 * variation_factor)**2,
+            rng=galsim.BaseDeviate(seed))
 
         if self._noise_level is not None and self._noise_level > 0:
             self._noise_field = self._rng.normal(
@@ -82,51 +83,22 @@ class PowerSpectrumPSF(object):
         lm, ls = _getlogmnsigma(self._median_seeing, 0.1)
         self._fwhm_central = np.exp(self._rng.normal() * ls + lm)
 
-        ls = 0.005 * variation_factor
-        fac2 = 10
-        fac3 = fac2 * 10
-        self._fwhm_x = self._rng.normal() * ls
-        self._fwhm_y = self._rng.normal() * ls
-        self._fwhm_xx = self._rng.normal() * ls / fac2
-        self._fwhm_xy = self._rng.normal() * ls / fac2
-        self._fwhm_yy = self._rng.normal() * ls / fac2
-        self._fwhm_xxx = self._rng.normal() * ls / fac3
-        self._fwhm_xxy = self._rng.normal() * ls / fac3
-        self._fwhm_xyy = self._rng.normal() * ls / fac3
-        self._fwhm_yyy = self._rng.normal() * ls / fac3
-
     def _get_atm(self, x, y):
         xs = (x + 1 - self._im_cen) * self._scale
         ys = (y + 1 - self._im_cen) * self._scale
         g1, g2 = self._ps.getShear((xs, ys))
         mu = self._ps.getMagnification((xs, ys))
 
-        if mu < 0.1:
-            mu = 0.1
-
         if g1*g1 + g2*g2 >= 1.0:
             norm = np.sqrt(g1*g1 + g2*g2) / 0.5
             g1 /= norm
             g2 /= norm
 
-        xs = (x - self._im_cen) * self._x_scale
-        ys = (y - self._im_cen) * self._x_scale
-        fwhm = (
-            self._fwhm_central +
-            xs * self._fwhm_x +
-            ys * self._fwhm_y +
-            xs * xs * self._fwhm_xx +
-            xs * ys * self._fwhm_xy +
-            ys * ys * self._fwhm_yy +
-            xs * xs * xs * self._fwhm_xxx +
-            xs * xs * ys * self._fwhm_xxy +
-            xs * ys * ys * self._fwhm_xyy +
-            ys * ys * ys * self._fwhm_yyy
-            )
+        fwhm = self._fwhm_central / np.sqrt(mu)
 
         psf = galsim.Moffat(
             beta=2.5,
-            fwhm=fwhm).lens(g1=g1, g2=g2, mu=mu)
+            fwhm=fwhm).shear(g1=g1, g2=g2)
 
         return psf
 
