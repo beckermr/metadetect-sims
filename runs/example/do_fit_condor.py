@@ -36,11 +36,11 @@ def _fit_m(prr, mrr):
 
     msk = (
         np.isfinite(g1p) &
-        np.isfinite(R11p) & 
+        np.isfinite(R11p) &
         np.isfinite(g1m) &
-        np.isfinite(R11m) &         
+        np.isfinite(R11m) &
         np.isfinite(g2p) &
-        np.isfinite(R22p) & 
+        np.isfinite(R22p) &
         np.isfinite(g2m) &
         np.isfinite(R22m))
     g1p = g1p[msk]

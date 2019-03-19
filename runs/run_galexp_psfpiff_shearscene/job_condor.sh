@@ -13,7 +13,7 @@ else
     mkdir -p $tmpdir
 fi
 
-source activate bnl
+conda activate bnl
 
 # change to correct dir just to be sure
 cd $3/..
