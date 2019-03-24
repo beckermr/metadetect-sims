@@ -57,7 +57,7 @@ class PowerSpectrumPSF(object):
         self._ps = galsim.PowerSpectrum(
             e_power_function=_pf,
             b_power_function=_pf)
-        ng = 64
+        ng = 128
         gs = max(self._tot_width * self._scale / ng, 1)
         self.ng = ng
         self.gs = gs

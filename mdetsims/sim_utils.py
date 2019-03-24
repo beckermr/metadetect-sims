@@ -459,7 +459,7 @@ class Sim(dict):
                 PowerSpectrumPSF(
                     rng=self.rng,
                     im_width=self.dim,
-                    buff=75,
+                    buff=self.dim/2,
                     scale=self.pixelscale,
                     **kwargs)
                 for _ in range(self.n_coadd_psf)]
