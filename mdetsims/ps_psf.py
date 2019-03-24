@@ -94,7 +94,7 @@ class PowerSpectrumPSF(object):
             g1 /= norm
             g2 /= norm
 
-        fwhm = self._fwhm_central / np.power(mu, 0.6)
+        fwhm = self._fwhm_central / np.power(mu, 1.0)
 
         psf = galsim.Moffat(
             beta=2.5,
