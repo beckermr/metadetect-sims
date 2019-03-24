@@ -38,7 +38,7 @@ class PowerSpectrumPSF(object):
     """
     def __init__(self, *,
                  rng, im_width, buff, scale, trunc=1,
-                 noise_level=None, variation_factor=7.5,
+                 noise_level=None, variation_factor=5,
                  median_seeing=0.8):
         self._rng = rng
         self._im_cen = (im_width - 1)/2
@@ -94,7 +94,7 @@ class PowerSpectrumPSF(object):
             g1 /= norm
             g2 /= norm
 
-        fwhm = self._fwhm_central / np.sqrt(mu)
+        fwhm = self._fwhm_central / np.power(mu, 0.6)
 
         psf = galsim.Moffat(
             beta=2.5,
