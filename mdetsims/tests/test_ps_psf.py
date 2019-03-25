@@ -84,16 +84,16 @@ def test_ps_psf_variation(noise_level):
 @pytest.mark.parametrize('noise_level', [None, 0, 1e-3])
 def test_ps_psf_truncation(noise_level):
     ps1 = PowerSpectrumPSF(
-        rng=np.random.RandomState(seed=10),
+        rng=np.random.RandomState(seed=15),
         im_width=120,
-        buff=20,
+        buff=120,
         scale=PIXEL_SCALE,
         trunc=1,
         noise_level=noise_level)
     ps2 = PowerSpectrumPSF(
-        rng=np.random.RandomState(seed=10),
+        rng=np.random.RandomState(seed=15),
         im_width=120,
-        buff=20,
+        buff=120,
         scale=PIXEL_SCALE,
         trunc=100,
         noise_level=noise_level)
