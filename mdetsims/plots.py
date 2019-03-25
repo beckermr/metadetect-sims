@@ -29,7 +29,7 @@ def plot_psf_model(fwhms, g1, g2, im_width, axs):
     n = fwhms.shape[0]
     xt = []
     for i, _x in enumerate(np.linspace(0, im_width, n)):
-        if i % 10 == 0 or i == 0 or i == n - 1:
+        if i % 25 == 0 or i == 0 or i == n - 1:
             xt.append("%0.0f" % _x)
         else:
             xt.append('')
