@@ -78,6 +78,12 @@ class Sim(dict):
     get_psf_obs(*, x, y):
         Get an ngmix Observation of the PSF at the position (x, y).
 
+    Attributes
+    ----------
+    area_sqr_arcmin : float
+        The effective area simulated in square arcmin assuming the pixel
+        scale is in arcsec.
+
     Notes
     -----
     The valid kinds of galaxies are
@@ -129,6 +135,8 @@ class Sim(dict):
         self.n_coadd_psf = n_coadd_psf or n_coadd
         self.homogenize_psf = homogenize_psf
         self.mask_and_interp = mask_and_interp
+
+        self.area_sqr_arcmin = ((self.dim - 2*self.buff) * scale / 60)**2
 
         self._galsim_rng = galsim.BaseDeviate(
             seed=self.rng.randint(low=1, high=2**32-1))
@@ -469,7 +477,7 @@ class Sim(dict):
 
         psf = galsim.Sum([
             p.getPSF(galsim.PositionD(x=x, y=y))
-            for p in self._psfs])
+            for p in self._psfs]).withFlux(1)
         psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
         psf_im /= np.sum(psf_im)
 
@@ -486,7 +494,7 @@ class Sim(dict):
 
         psf = galsim.Sum([
             p.getPSF(galsim.PositionD(x=x, y=y))
-            for p in self._psfs])
+            for p in self._psfs]).withFlux(1)
         psf_im = psf.drawImage(
             nx=21, ny=21, wcs=_psf_wcs, method='no_pixel').array.copy()
         psf_im /= np.sum(psf_im)
