@@ -1,4 +1,5 @@
 import glob
+import os
 import pickle
 import tqdm
 import numpy as np
@@ -84,16 +85,20 @@ def _func(fname):
 
 
 tmpdir = 'outputs'
-files = glob.glob('%s/data*.pkl' % tmpdir)
 
-print('found %d outputs' % len(files))
-
-io = [joblib.delayed(_func)(fname) for fname in files]
-outputs = joblib.Parallel(
-    verbose=10,
-    n_jobs=-1,
-    pre_dispatch='2*n_jobs',
-    max_nbytes=None)(io)
+if not os.path.exists('outputs/final.pkl'):
+    files = glob.glob('%s/data*.pkl' % tmpdir)
+    print('found %d outputs' % len(files))
+    io = [joblib.delayed(_func)(fname) for fname in files]
+    outputs = joblib.Parallel(
+        verbose=10,
+        n_jobs=-1,
+        pre_dispatch='2*n_jobs',
+        max_nbytes=None)(io)
+else:
+    print('found final output')
+    with open('outputs/final.pkl', 'rb') as fp:
+        outputs = pickle.load(fp)
 
 for i, s2n in enumerate([10, 15, 20]):
     _outputs = []
