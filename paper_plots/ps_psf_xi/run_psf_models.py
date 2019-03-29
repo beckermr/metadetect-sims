@@ -42,16 +42,25 @@ def _get_psf_variation(func, n):
     return fwhm, g1, g2
 
 
-def _measure_xi(seed, n):
-    psf = PowerSpectrumPSF(
-        rng=np.random.RandomState(seed=seed),
-        im_width=225,
-        buff=225//2,
-        scale=0.263,
-        median_seeing=0.8)
+def _measure_xi(seed, n, n_stack=1):
+    rng = np.random.RandomState(seed=seed)
+
+    psfs = [
+        PowerSpectrumPSF(
+            rng=rng,
+            im_width=225,
+            buff=225//2,
+            scale=0.263,
+            median_seeing=0.8)
+        for _ in range(n_stack)]
 
     def _func(x, y):
-        return psf.getPSF(galsim.PositionD(x=x, y=y))
+        if len(psfs) > 1:
+            return galsim.Sum([
+                psf.getPSF(galsim.PositionD(x=x, y=y))
+                for psf in psfs]).withFlux(1.0)
+        else:
+            return psfs[0].getPSF(galsim.PositionD(x=x, y=y))
 
     fwhm, g1, g2 = _get_psf_variation(_func, n=n)
 
@@ -71,8 +80,8 @@ def _measure_xi(seed, n):
 
 
 rng = np.random.RandomState(seed=419)
-seeds = rng.randint(1, 2**30, size=2)
-sims = [joblib.delayed(_measure_xi)(seed, 225) for seed in seeds]
+seeds = rng.randint(1, 2**30, size=1)
+sims = [joblib.delayed(_measure_xi)(seed, 225, n_stack=30) for seed in seeds]
 outputs = joblib.Parallel(
     verbose=20,
     n_jobs=1,
