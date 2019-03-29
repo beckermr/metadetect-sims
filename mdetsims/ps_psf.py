@@ -1,5 +1,8 @@
 import numpy as np
 import galsim
+import galsim.lensing_ps
+import galsim.table
+import galsim.utilities
 
 
 class PowerSpectrumPSF(object):
@@ -69,6 +72,27 @@ class PowerSpectrumPSF(object):
             variance=(0.01 * variation_factor)**2,
             rng=galsim.BaseDeviate(seed))
 
+        # cache the galsim LookupTable2D objects by hand to speed computations
+        g1_grid, g2_grid, mu_grid = galsim.lensing_ps.theoryToObserved(
+            self._ps.im_g1.array, self._ps.im_g2.array,
+            self._ps.im_kappa.array)
+
+        self._lut_g1 = galsim.table.LookupTable2D(
+            self._ps.x_grid,
+            self._ps.y_grid, g1_grid.T,
+            edge_mode='wrap',
+            interpolant=galsim.Lanczos(5))
+        self._lut_g2 = galsim.table.LookupTable2D(
+            self._ps.x_grid,
+            self._ps.y_grid, g2_grid.T,
+            edge_mode='wrap',
+            interpolant=galsim.Lanczos(5))
+        self._lut_mu = galsim.table.LookupTable2D(
+            self._ps.x_grid,
+            self._ps.y_grid, mu_grid.T - 1,
+            edge_mode='wrap',
+            interpolant=galsim.Lanczos(5))
+
         self._g1_mean = self._rng.normal() * 0.01 * variation_factor
         self._g2_mean = self._rng.normal() * 0.01 * variation_factor
 
@@ -86,11 +110,18 @@ class PowerSpectrumPSF(object):
         lm, ls = _getlogmnsigma(self._median_seeing, 0.1)
         self._fwhm_central = np.exp(self._rng.normal() * ls + lm)
 
+    def _get_lensing(self, pos):
+        pos_x, pos_y = galsim.utilities._convertPositions(
+            pos, galsim.arcsec, '_get_lensing')
+        return (
+            self._lut_g1(pos_x, pos_y),
+            self._lut_g2(pos_x, pos_y),
+            self._lut_mu(pos_x, pos_y)+1)
+
     def _get_atm(self, x, y):
         xs = (x + 1 - self._im_cen) * self._scale
         ys = (y + 1 - self._im_cen) * self._scale
-        g1, g2 = self._ps.getShear((xs, ys))
-        mu = self._ps.getMagnification((xs, ys))
+        g1, g2, mu = self._get_lensing((xs, ys))
 
         if g1*g1 + g2*g2 >= 1.0:
             norm = np.sqrt(g1*g1 + g2*g2) / 0.5
