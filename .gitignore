@@ -112,3 +112,6 @@ venv.bak/
 *.desc
 *.desc.submitted
 *.oe
+*.png
+*.pdf
+*.csv

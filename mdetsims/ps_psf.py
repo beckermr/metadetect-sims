@@ -69,6 +69,9 @@ class PowerSpectrumPSF(object):
             variance=(0.01 * variation_factor)**2,
             rng=galsim.BaseDeviate(seed))
 
+        self._g1_mean = self._rng.normal() * 0.01 * variation_factor
+        self._g2_mean = self._rng.normal() * 0.01 * variation_factor
+
         if self._noise_level is not None and self._noise_level > 0:
             self._noise_field = self._rng.normal(
                 size=(im_width + buff + 37, im_width + buff + 37)
@@ -98,7 +101,7 @@ class PowerSpectrumPSF(object):
 
         psf = galsim.Moffat(
             beta=2.5,
-            fwhm=fwhm).shear(g1=g1, g2=g2)
+            fwhm=fwhm).shear(g1=g1 + self._g1_mean, g2=g2 + self._g2_mean)
 
         return psf
 
