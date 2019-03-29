@@ -81,7 +81,7 @@ def _measure_xi(seed, n, n_stack=1):
 
 rng = np.random.RandomState(seed=419)
 seeds = rng.randint(1, 2**30, size=1)
-sims = [joblib.delayed(_measure_xi)(seed, 225, n_stack=30) for seed in seeds]
+sims = [joblib.delayed(_measure_xi)(seed, 225, n_stack=900) for seed in seeds]
 outputs = joblib.Parallel(
     verbose=20,
     n_jobs=1,
