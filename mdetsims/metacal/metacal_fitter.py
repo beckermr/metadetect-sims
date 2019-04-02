@@ -37,6 +37,7 @@ class MetacalFitter(FitterBase):
 
         super().__init__(conf, nband, rng)
 
+    def _setup(self):
         self.metacal_prior = self._get_prior(self['metacal'])
         assert self.metacal_prior is not None
         self['metacal']['symmetrize_weight'] = self['metacal'].get(
@@ -46,6 +47,14 @@ class MetacalFitter(FitterBase):
         if 'types' in self['metacal']:
             assert self['metacal']['types'] == METACAL_TYPES
 
+    @property
+    def result(self):
+        """Get the result data"""
+        if not hasattr(self, '_result'):
+            raise RuntimeError('run go() first')
+
+        return self._result.copy()
+
     def go(self, mbobs_list):
         """Run metcal on a list of MultiBandObsLists.
 
@@ -54,11 +63,6 @@ class MetacalFitter(FitterBase):
         mbobs_list: list of MultiBandObsList
             One for each object.  If it is a simple MultiBandObsList it will
             be converted to a list
-
-        Returns
-        -------
-        data: np.ndarray
-            Array with all output fields.
         """
         if not isinstance(mbobs_list, list):
             mbobs_list = [mbobs_list]
@@ -80,8 +84,7 @@ class MetacalFitter(FitterBase):
         if self['metacal']['symmetrize_weight']:
             self._symmetrize_weights(mbobs_list_mcal)
 
-        self.result = self._do_all_metacal(mbobs_list_mcal, data=mof_data)
-        return self.result
+        self._result = self._do_all_metacal(mbobs_list_mcal, data=mof_data)
 
     def _symmetrize_weights(self, mbobs_list):
         def _symmetrize_weight(wt):

@@ -155,7 +155,8 @@ TEST_METACAL_MOF_CONFIG = {
         'metacal_pars': {
             'psf': 'fitgauss',
             'types': ['noshear', '1p', '1m', '2p', '2m'],
-            'use_noise_image': True,
+            # the MOF lib does not set the noise images so we cannot do this
+            # 'use_noise_image': True,
         },
 
         'model': 'gauss',
