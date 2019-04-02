@@ -25,7 +25,7 @@ class MetacalFitter(FitterBase):
     rng : np.random.RandomState
         An RNG instance.
     mof_fitter : mdetsims.metcal.MOFFitter
-        A an instantiated MOFFitter for doing neightbor subtraction.
+        A an instantiated MOFFitter for doing neighbor subtraction.
 
     Methods
     -------
@@ -53,7 +53,10 @@ class MetacalFitter(FitterBase):
         if not hasattr(self, '_result'):
             raise RuntimeError('run go() first')
 
-        return self._result.copy()
+        if self._result is not None:
+            return self._result.copy()
+        else:
+            return None
 
     def go(self, mbobs_list):
         """Run metcal on a list of MultiBandObsLists.
@@ -71,7 +74,7 @@ class MetacalFitter(FitterBase):
             # for mof fitting, we expect a list of mbobs_lists
             mof_data, epochs_data = self.mof_fitter.go(mbobs_list)
             if mof_data is None or epochs_data is None:
-                return None
+                self._result = None
             fitter = self.mof_fitter.get_mof_fitter()
 
             # this gets all objects, all bands in a list of MultiBandObsList
