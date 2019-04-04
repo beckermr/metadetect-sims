@@ -216,11 +216,8 @@ class MOFFitter(FitterBase):
         n = self.namer
         dt = [
             ('id', 'i8'),
-            ('ra', 'f8'),
-            ('dec', 'f8'),
-            ('fof_id', 'i8'),  # fof id within image
+            ('fofid', 'i8'),  # fof id within image
             ('flags', 'i4'),
-            # ('flagstr','U11'),
             ('flagstr', 'S18'),
             ('masked_frac', 'f4'),
             ('psf_g', 'f8', 2),
@@ -270,7 +267,7 @@ class MOFFitter(FitterBase):
         n = self.namer
         st[n('flags')] = st['flags']
 
-        noset = ['id', 'ra', 'dec',
+        noset = ['id', 'ra', 'dec', 'fofid',
                  'flags', 'flagstr', n('flags')]
 
         for n in st.dtype.names:
@@ -307,6 +304,8 @@ class MOFFitter(FitterBase):
                 t = output[i]
                 mbobs = mbobs_list[i]
 
+                t['id'] = mbobs.meta['id']
+                t['fofid'] = mbobs.meta['fofid']
                 t['masked_frac'] = mbobs.meta['masked_frac']
 
                 for band, obslist in enumerate(mbobs):

@@ -1,3 +1,2 @@
-from .fofs import get_fofs  # noqa
-from .mof_fitter import MOFFitter  # noqa
-from .metacal_fitter import MetacalFitter  # noqa
+from .metacal_mof_fitter import MetacalPlusMOF  # noqa
+from .metacal_fitter import METACAL_TYPES  # noqa

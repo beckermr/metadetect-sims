@@ -20,7 +20,7 @@ class Namer(object):
     def __init__(self, front=None, back=None):
         if front == '':
             front = None
-        if back == '' or back == 'noshear':
+        if back == '':
             back = None
 
         self.front = front

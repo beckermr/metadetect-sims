@@ -25,7 +25,7 @@ class MetacalFitter(FitterBase):
     rng : np.random.RandomState
         An RNG instance.
     mof_fitter : mdetsims.metcal.MOFFitter
-        A an instantiated MOFFitter for doing neighbor subtraction.
+        An instantiated MOFFitter for doing neighbor subtraction.
 
     Methods
     -------
@@ -196,8 +196,10 @@ class MetacalFitter(FitterBase):
         return True
 
     def _print_result(self, data):
-        mess = "    mcal s2n: %g Trat: %g"
-        logger.debug(mess % (data['mcal_s2n'][0], data['mcal_T_ratio'][0]))
+        logger.debug(
+            "    mcal s2n: %g Trat: %g",
+            data['mcal_s2n_noshear'][0],
+            data['mcal_T_ratio_noshear'][0])
 
     def _get_metacal_dtype(self, npars, nband):
         dt = [
@@ -205,12 +207,7 @@ class MetacalFitter(FitterBase):
             ('y', 'f8'),
         ]
         for mtype in METACAL_TYPES:
-            if mtype == 'noshear':
-                back = None
-            else:
-                back = mtype
-
-            n = Namer(front='mcal', back=back)
+            n = Namer(front='mcal', back=mtype)
             if mtype == 'noshear':
                 dt += [
                     (n('psf_g'), 'f8', 2),
@@ -252,13 +249,7 @@ class MetacalFitter(FitterBase):
         data0['x'] = mbobs[0][0].meta['orig_col']
 
         for mtype in METACAL_TYPES:
-
-            if mtype == 'noshear':
-                back = None
-            else:
-                back = mtype
-
-            n = Namer(front='mcal', back=back)
+            n = Namer(front='mcal', back=mtype)
 
             res = allres[mtype]
 
@@ -273,7 +264,7 @@ class MetacalFitter(FitterBase):
 
             # this relies on noshear coming first in the metacal
             # types
-            data0[n('T_ratio')] = data0[n('T')]/data0['mcal_psf_T']
+            data0[n('T_ratio')] = data0[n('T')]/data0['mcal_psf_T_noshear']
 
         return data
 

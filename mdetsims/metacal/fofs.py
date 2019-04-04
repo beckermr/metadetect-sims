@@ -1,5 +1,4 @@
 import copy
-import tqdm
 import numpy as np
 
 
@@ -149,7 +148,7 @@ class MEDSNbrs(object):
         nbrs_data = []
         dtype = [('number', 'i8'), ('nbr_number', 'i8')]
 
-        for mindex in tqdm.trange(self.meds.size):
+        for mindex in range(self.meds.size):
             nbrs = self.check_mindex(mindex)
 
             # add to final list
@@ -234,7 +233,7 @@ class NbrsFoF(object):
         # init
         self._init_fofs()
 
-        for i in tqdm.trange(self.Nobj):
+        for i in range(self.Nobj):
             self._link_fof(i)
 
         for fofid, k in enumerate(self.fofs):

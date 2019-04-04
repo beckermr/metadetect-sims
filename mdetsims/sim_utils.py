@@ -48,6 +48,9 @@ class Sim(dict):
         The noise for a single epoch image.
     ngal : float, optional
         The number of objects to simulate per arcminute.
+    gal_grid : int or None
+        If not `None`, galaxies are laid out on a grid of `gal_grid` x
+        `gal_grid` dimensions in the central part of the image.
     psf_kws : dict or None, optional
         Extra keyword arguments to pass to the constructors for PSF objects.
         See the doc strings of the PSF objects `PowerSpectrumPSF` and `RealPSF`
@@ -113,6 +116,7 @@ class Sim(dict):
             dim=225, buff=25,
             noise=180,
             ngal=45.0,
+            gal_grid=None,
             psf_kws=None,
             gal_kws=None,
             homogenize_psf=False,
@@ -129,6 +133,7 @@ class Sim(dict):
         self.buff = buff
         self.noise = noise / np.sqrt(self.n_coadd)
         self.ngal = ngal
+        self.gal_grid = gal_grid
         self.im_cen = (dim - 1) / 2
         self.psf_kws = psf_kws
         self.gal_kws = gal_kws
@@ -164,6 +169,9 @@ class Sim(dict):
             (self.dim * self.pixelscale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
+
+        if self.gal_grid is not None:
+            self.nobj = self.gal_grid * self.gal_grid
 
     def _extra_init_for_wldeblend(self):
         # gaurd the import here
@@ -360,13 +368,25 @@ class Sim(dict):
             image_pos=galsim.PositionD(x=x+1, y=y+1))
 
     def _get_dxdy(self):
-        return self.rng.uniform(
-            low=-self.pos_width,
-            high=self.pos_width,
-            size=2)
+        if self.gal_grid is not None:
+            yind, xind = np.unravel_index(
+                self._gal_grid_ind, (self.gal_grid, self.gal_grid))
+            dg = self.pos_width * 2 / self.gal_grid
+            self._gal_grid_ind += 1
+            return (
+                yind * dg + dg/2 - self.pos_width,
+                xind * dg + dg/2 - self.pos_width)
+        else:
+            return self.rng.uniform(
+                low=-self.pos_width,
+                high=self.pos_width,
+                size=2)
 
     def _get_nobj(self):
-        return self.rng.poisson(self.nobj)
+        if self.gal_grid is not None:
+            return self.nobj
+        else:
+            return self.rng.poisson(self.nobj)
 
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
@@ -422,6 +442,9 @@ class Sim(dict):
         positions = []
 
         nobj = self._get_nobj()
+
+        if self.gal_grid is not None:
+            self._gal_grid_ind = 0
 
         for i in range(nobj):
             # unsheared offset from center of image
