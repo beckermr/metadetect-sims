@@ -6,3 +6,5 @@ CONFIG = {
     'scale': 0.263,
     'gal_grid': 7,
 }
+
+DO_METACAL_MOF = True
