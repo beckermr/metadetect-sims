@@ -77,6 +77,8 @@ else:
             (op['flags'] == 0) &
             (op['wmom_s2n'] > s2n_cut) &
             (op['wmom_T_ratio'] > trat_cut))
+        if not np.any(q):
+            return None
         g2p = op['wmom_g'][q, 1]
 
         om = res['2m']
@@ -94,45 +96,50 @@ else:
 
 
 def _run_sim(seed):
-    if DO_METACAL_MOF:
-        config = {}
-        config.update(TEST_METACAL_MOF_CONFIG)
+    try:
 
-        rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng=rng, g1=0.02, **CONFIG).get_mbobs()
-        md = MetacalPlusMOF(config, mbobs, rng)
-        md.go()
-        pres = md.result
+        if DO_METACAL_MOF:
+            config = {}
+            config.update(TEST_METACAL_MOF_CONFIG)
 
-        rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng=rng, g1=-0.02, **CONFIG).get_mbobs()
-        md = MetacalPlusMOF(config, mbobs, rng)
-        md.go()
-        mres = md.result
+            rng = np.random.RandomState(seed=seed)
+            mbobs = Sim(rng=rng, g1=0.02, **CONFIG).get_mbobs()
+            md = MetacalPlusMOF(config, mbobs, rng)
+            md.go()
+            pres = md.result
 
-    else:
-        config = {}
-        config.update(TEST_METADETECT_CONFIG)
+            rng = np.random.RandomState(seed=seed)
+            mbobs = Sim(rng=rng, g1=-0.02, **CONFIG).get_mbobs()
+            md = MetacalPlusMOF(config, mbobs, rng)
+            md.go()
+            mres = md.result
 
-        rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng=rng, g1=0.02, **CONFIG).get_mbobs()
-        md = Metadetect(config, mbobs, rng)
-        md.go()
-        pres = md.result
+        else:
+            config = {}
+            config.update(TEST_METADETECT_CONFIG)
 
-        rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng=rng, g1=-0.02, **CONFIG).get_mbobs()
-        md = Metadetect(config, mbobs, rng)
-        md.go()
-        mres = md.result
+            rng = np.random.RandomState(seed=seed)
+            mbobs = Sim(rng=rng, g1=0.02, **CONFIG).get_mbobs()
+            md = Metadetect(config, mbobs, rng)
+            md.go()
+            pres = md.result
 
-    outputs = {}
-    for s2n in [10, 15, 20]:
-        outputs[s2n] = (
-            _meas_shear(pres, s2n_cut=s2n),
-            _meas_shear(mres, s2n_cut=s2n))
+            rng = np.random.RandomState(seed=seed)
+            mbobs = Sim(rng=rng, g1=-0.02, **CONFIG).get_mbobs()
+            md = Metadetect(config, mbobs, rng)
+            md.go()
+            mres = md.result
 
-    return outputs
+        outputs = {}
+        for s2n in [10, 15, 20]:
+            outputs[s2n] = (
+                _meas_shear(pres, s2n_cut=s2n),
+                _meas_shear(mres, s2n_cut=s2n))
+
+        return outputs
+
+    except Exception:
+        return {10: (None, None), 15: (None, None), 20: (None, None)}
 
 
 if DO_METACAL_MOF:
