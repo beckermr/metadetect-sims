@@ -232,9 +232,22 @@ class Sim(dict):
             no_agn=False,
             verbose_model=False)
 
+        # here we account for the fact that not all bands are the same depth
+        # r and i tend to be deeper than z
+        # these numbers were computed with the descwl defaults assuming
+        # constant exposure times in each band
+        # the effect is much smaller for LSST than DES due to the z band
+        # being better
+        if survey_name == 'DES':
+            noise_factor = 1.3633872639737707
+        elif survey_name == 'LSST':
+            noise_factor = 1.0510798711450275
+        else:
+            noise_factor = 1.0
+
         # now we reset the noise using the internal sky level appropriate
         # for the internal units
-        self.noise = np.sqrt(self._survey.mean_sky_level)
+        self.noise = noise_factor * np.sqrt(self._survey.mean_sky_level)
 
         # when we sample from the catalog, we need to pull the right number
         # of objects. Since the default catalog is one square degree
@@ -570,7 +583,9 @@ class Sim(dict):
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
         if self.psf_type == 'gauss':
-            psf = galsim.Gaussian(fwhm=0.9)
+            kws = self.psf_kws or {}
+            fwhm = kws.get('fwhm', 0.9)
+            psf = galsim.Gaussian(fwhm=fwhm)
             psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
             psf_im /= np.sum(psf_im)
             method = 'auto'
