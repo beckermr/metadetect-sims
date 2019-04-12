@@ -138,7 +138,8 @@ def _run_sim(seed):
 
         return outputs
 
-    except Exception:
+    except Exception as e:
+        print(repr(e))
         return {10: (None, None), 15: (None, None), 20: (None, None)}
 
 
