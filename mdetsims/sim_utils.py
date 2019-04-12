@@ -204,50 +204,50 @@ class Sim(dict):
         else:
             exptime = None
 
-        # make the survey and code to build galaxies from it
-        pars = descwl.survey.Survey.get_defaults(
-            survey_name=survey_name,
-            filter_band='i')  # always i band!
+        self._surveys = {}
+        self._builders = {}
+        noise_var = 0.0
+        for band in ['r', 'i', 'z']:
+            # make the survey and code to build galaxies from it
+            pars = descwl.survey.Survey.get_defaults(
+                survey_name=survey_name,
+                filter_band=band)
 
-        pars['survey_name'] = survey_name
-        pars['filter_band'] = 'i'
+            pars['survey_name'] = survey_name
+            pars['filter_band'] = band
 
-        # note in the way we call the descwl package, the image width
-        # and height is not actually used
-        pars['image_width'] = self.dim
-        pars['image_height'] = self.dim
+            # note in the way we call the descwl package, the image width
+            # and height is not actually used
+            pars['image_width'] = self.dim
+            pars['image_height'] = self.dim
 
-        # the psf not actually used for anything given how we call the
-        # descwl package
-        pars['psf_model'] = galsim.Gaussian(fwhm=0.7)
+            # the psf not actually used for anything given how we call the
+            # descwl package
+            pars['psf_model'] = galsim.Gaussian(fwhm=0.7)
 
-        # we fix the exposure time and adjust the noise
-        pars['exposure_time'] = exptime * self.n_coadd
+            # we fix the exposure time and adjust the noise
+            pars['exposure_time'] = exptime
 
-        self._survey = descwl.survey.Survey(**pars)
-        self._builder = descwl.model.GalaxyBuilder(
-            survey=self._survey,
-            no_disk=False,
-            no_bulge=False,
-            no_agn=False,
-            verbose_model=False)
+            self._surveys[band] = descwl.survey.Survey(**pars)
+            self._builders[band] = descwl.model.GalaxyBuilder(
+                survey=self._surveys[band],
+                no_disk=False,
+                no_bulge=False,
+                no_agn=False,
+                verbose_model=False)
 
-        # here we account for the fact that not all bands are the same depth
-        # r and i tend to be deeper than z
-        # these numbers were computed with the descwl defaults assuming
-        # constant exposure times in each band
-        # the effect is much smaller for LSST than DES due to the z band
-        # being better
-        if survey_name == 'DES':
-            noise_factor = 1.3633872639737707
-        elif survey_name == 'LSST':
-            noise_factor = 1.0510798711450275
-        else:
-            noise_factor = 1.0
+            noise_var += self._surveys[band].mean_sky_level
 
         # now we reset the noise using the internal sky level appropriate
         # for the internal units
-        self.noise = noise_factor * np.sqrt(self._survey.mean_sky_level)
+        # we are using stack of n_coadd total images equally
+        # distributed over r i and z
+
+        # rescale noise variance for a mean image in the bands
+        noise_var /= len(self._builders)
+
+        # now we stack n_coadd / n_bands of those
+        self.noise = np.sqrt(noise_var / (self.n_coadd / len(self._builders)))
 
         # when we sample from the catalog, we need to pull the right number
         # of objects. Since the default catalog is one square degree
@@ -432,8 +432,13 @@ class Sim(dict):
         rind = self.rng.choice(self._wldeblend_cat.size)
         angle = self.rng.uniform() * 360
 
-        gal = self._builder.from_catalog(
-            self._wldeblend_cat[rind], 0, 0, self._survey.filter_band).model
+        # we divide by the number of bands here since we are averaging over
+        # n_coadd / n_bands images per band and then normalizing by n_coadd
+        gal = galsim.Sum(
+            [self._builders[band].from_catalog(
+                self._wldeblend_cat[rind], 0, 0,
+                self._surveys[band].filter_band).model
+             for band in self._builders]) / len(self._builders)
 
         # apply an extra rotation
         gal = gal.rotate(angle * galsim.degrees)
