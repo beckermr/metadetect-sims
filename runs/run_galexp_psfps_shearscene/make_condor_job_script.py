@@ -35,7 +35,7 @@ Image_Size       =  1000000
 """
 
 try:
-    from .config import N_PATCHES_PER_JOB
+    from config import N_PATCHES_PER_JOB
 except Exception:
     N_PATCHES_PER_JOB = 200
 
@@ -50,7 +50,7 @@ Queue
 
 
 try:
-    from .config import N_PATCHES as n_patches
+    from config import N_PATCHES as n_patches
 except Exception:
     n_patches = 10_000_000
 n_jobs = n_patches // N_PATCHES_PER_JOB
