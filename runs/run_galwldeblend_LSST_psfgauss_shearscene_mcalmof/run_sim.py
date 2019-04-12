@@ -189,8 +189,7 @@ def _run_sim(seed):
             LOGGER.info('found %f objects per square arcminute', dens)
 
             return pres, mres
-        except Exception as e:
-            print(e)
+        except Exception:
             return None, None
     else:
         try:
