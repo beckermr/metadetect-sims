@@ -1,6 +1,8 @@
 import numpy as np
 import esutil as eu
 
+import ngmix
+
 from metadetect.detect import MEDSifier
 from .util import get_masked_frac
 from .fofs import get_fofs
@@ -85,9 +87,13 @@ class MetacalPlusMOF(object):
                 self.conf, nband, self.rng,
                 mof_fitter=MOFFitter(self.conf, nband, self.rng))
 
-            mcal.go(list_of_mbobs)
+            try:
+                mcal.go(list_of_mbobs)
+                res = mcal.result
+            except ngmix.gexceptions.GMixRangeError as e:
+                print(repr(e))
+                res = None
 
-            res = mcal.result
             if res is not None:
                 data.append(res)
 
