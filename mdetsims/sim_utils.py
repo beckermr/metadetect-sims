@@ -28,6 +28,8 @@ class Sim(dict):
         The kind of galaxy to simulate.
     psf_type : str
         The kind of PSF to simulate.
+    scale : float
+        The pixel scale of the image.
     shear_scene : bool, optional
         Whether or not to shear the full scene.
     n_coadd : int, optional
@@ -48,6 +50,9 @@ class Sim(dict):
         The noise for a single epoch image.
     ngal : float, optional
         The number of objects to simulate per arcminute.
+    gal_grid : int or None
+        If not `None`, galaxies are laid out on a grid of `gal_grid` x
+        `gal_grid` dimensions in the central part of the image.
     psf_kws : dict or None, optional
         Extra keyword arguments to pass to the constructors for PSF objects.
         See the doc strings of the PSF objects `PowerSpectrumPSF` and `RealPSF`
@@ -113,6 +118,7 @@ class Sim(dict):
             dim=225, buff=25,
             noise=180,
             ngal=45.0,
+            gal_grid=None,
             psf_kws=None,
             gal_kws=None,
             homogenize_psf=False,
@@ -129,6 +135,7 @@ class Sim(dict):
         self.buff = buff
         self.noise = noise / np.sqrt(self.n_coadd)
         self.ngal = ngal
+        self.gal_grid = gal_grid
         self.im_cen = (dim - 1) / 2
         self.psf_kws = psf_kws
         self.gal_kws = gal_kws
@@ -142,14 +149,14 @@ class Sim(dict):
             seed=self.rng.randint(low=1, high=2**32-1))
 
         # typical pixel scale
-        self.pixelscale = scale
-        self.wcs = galsim.PixelScale(self.pixelscale)
+        self.scale = scale
+        self.wcs = galsim.PixelScale(self.scale)
 
         # frac of a single dimension that is used for drawing objects
         frac = 1.0 - self.buff * 2 / self.dim
 
         # half of the width of center of the patch that has objects
-        self.pos_width = self.dim * frac * 0.5 * self.pixelscale
+        self.pos_width = self.dim * frac * 0.5 * self.scale
 
         # for wldeblend galaxies, we have to adjust some of the input
         # parameters since they are computed self consisently from the
@@ -161,9 +168,12 @@ class Sim(dict):
         # compute the number we actually need
         self.nobj = int(
             self.ngal *
-            (self.dim * self.pixelscale / 60 * frac)**2)
+            (self.dim * self.scale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
+
+        if self.gal_grid is not None:
+            self.nobj = self.gal_grid * self.gal_grid
 
     def _extra_init_for_wldeblend(self):
         # gaurd the import here
@@ -196,37 +206,51 @@ class Sim(dict):
         else:
             exptime = None
 
-        # make the survey and code to build galaxies from it
-        pars = descwl.survey.Survey.get_defaults(
-            survey_name=survey_name,
-            filter_band='i')  # always i band!
+        self._surveys = {}
+        self._builders = {}
+        noise_var = 0.0
+        for band in ['r', 'i', 'z']:
+            # make the survey and code to build galaxies from it
+            pars = descwl.survey.Survey.get_defaults(
+                survey_name=survey_name,
+                filter_band=band)
 
-        pars['survey_name'] = survey_name
-        pars['filter_band'] = 'i'
+            pars['survey_name'] = survey_name
+            pars['filter_band'] = band
+            pars['pixel_scale'] = self.scale
 
-        # note in the way we call the descwl package, the image width
-        # and height is not actually used
-        pars['image_width'] = self.dim
-        pars['image_height'] = self.dim
+            # note in the way we call the descwl package, the image width
+            # and height is not actually used
+            pars['image_width'] = self.dim
+            pars['image_height'] = self.dim
 
-        # the psf not actually used for anything given how we call the
-        # descwl package
-        pars['psf_model'] = galsim.Gaussian(fwhm=0.7)
+            # the psf not actually used for anything given how we call the
+            # descwl package
+            pars['psf_model'] = galsim.Gaussian(fwhm=0.7)
 
-        # we fix the exposure time and adjust the noise
-        pars['exposure_time'] = exptime * self.n_coadd
+            # we fix the exposure time and adjust the noise
+            pars['exposure_time'] = exptime
 
-        self._survey = descwl.survey.Survey(**pars)
-        self._builder = descwl.model.GalaxyBuilder(
-            survey=self._survey,
-            no_disk=False,
-            no_bulge=False,
-            no_agn=False,
-            verbose_model=False)
+            self._surveys[band] = descwl.survey.Survey(**pars)
+            self._builders[band] = descwl.model.GalaxyBuilder(
+                survey=self._surveys[band],
+                no_disk=False,
+                no_bulge=False,
+                no_agn=False,
+                verbose_model=False)
+
+            noise_var += self._surveys[band].mean_sky_level
 
         # now we reset the noise using the internal sky level appropriate
         # for the internal units
-        self.noise = np.sqrt(self._survey.mean_sky_level)
+        # we are using stack of n_coadd total images equally
+        # distributed over r i and z
+
+        # rescale noise variance for a mean image in the bands
+        noise_var /= len(self._builders)
+
+        # now we stack n_coadd / n_bands of those
+        self.noise = np.sqrt(noise_var / (self.n_coadd / len(self._builders)))
 
         # when we sample from the catalog, we need to pull the right number
         # of objects. Since the default catalog is one square degree
@@ -267,8 +291,8 @@ class Sim(dict):
             # get the offset of the center
             dx = pos.x - (x_ll + (_im.shape[1] - 1)/2)
             dy = pos.y - (y_ll + (_im.shape[0] - 1)/2)
-            dx *= self.pixelscale
-            dy *= self.pixelscale
+            dx *= self.scale
+            dy *= self.scale
 
             # draw and set the proper origin
             stamp = obj.shift(dx=dx, dy=dy).drawImage(
@@ -360,13 +384,25 @@ class Sim(dict):
             image_pos=galsim.PositionD(x=x+1, y=y+1))
 
     def _get_dxdy(self):
-        return self.rng.uniform(
-            low=-self.pos_width,
-            high=self.pos_width,
-            size=2)
+        if self.gal_grid is not None:
+            yind, xind = np.unravel_index(
+                self._gal_grid_ind, (self.gal_grid, self.gal_grid))
+            dg = self.pos_width * 2 / self.gal_grid
+            self._gal_grid_ind += 1
+            return (
+                yind * dg + dg/2 - self.pos_width,
+                xind * dg + dg/2 - self.pos_width)
+        else:
+            return self.rng.uniform(
+                low=-self.pos_width,
+                high=self.pos_width,
+                size=2)
 
     def _get_nobj(self):
-        return self.rng.poisson(self.nobj)
+        if self.gal_grid is not None:
+            return self.nobj
+        else:
+            return self.rng.poisson(self.nobj)
 
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
@@ -399,8 +435,13 @@ class Sim(dict):
         rind = self.rng.choice(self._wldeblend_cat.size)
         angle = self.rng.uniform() * 360
 
-        gal = self._builder.from_catalog(
-            self._wldeblend_cat[rind], 0, 0, self._survey.filter_band).model
+        # we divide by the number of bands here since we are averaging over
+        # n_coadd / n_bands images per band and then normalizing by n_coadd
+        gal = galsim.Sum(
+            [self._builders[band].from_catalog(
+                self._wldeblend_cat[rind], 0, 0,
+                self._surveys[band].filter_band).model
+             for band in self._builders]) / len(self._builders)
 
         # apply an extra rotation
         gal = gal.rotate(angle * galsim.degrees)
@@ -422,6 +463,9 @@ class Sim(dict):
         positions = []
 
         nobj = self._get_nobj()
+
+        if self.gal_grid is not None:
+            self._gal_grid_ind = 0
 
         for i in range(nobj):
             # unsheared offset from center of image
@@ -445,8 +489,8 @@ class Sim(dict):
                 sdy = dy
 
             pos = galsim.PositionD(
-                x=sdx / self.pixelscale + self.im_cen,
-                y=sdy / self.pixelscale + self.im_cen)
+                x=sdx / self.scale + self.im_cen,
+                y=sdy / self.scale + self.im_cen)
 
             # get the PSF info
             _, _psf_wcs, _, _psf, _ = self._render_psf_image(
@@ -468,7 +512,7 @@ class Sim(dict):
                     rng=self.rng,
                     im_width=self.dim,
                     buff=self.dim/2,
-                    scale=self.pixelscale,
+                    scale=self.scale,
                     **kwargs)
                 for _ in range(self.n_coadd_psf)]
             LOGGER.debug('stacking %d power spectrum psfs', self.n_coadd_psf)
@@ -547,7 +591,9 @@ class Sim(dict):
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
         if self.psf_type == 'gauss':
-            psf = galsim.Gaussian(fwhm=0.9)
+            kws = self.psf_kws or {}
+            fwhm = kws.get('fwhm', 0.9)
+            psf = galsim.Gaussian(fwhm=fwhm)
             psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
             psf_im /= np.sum(psf_im)
             method = 'auto'

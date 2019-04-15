@@ -84,7 +84,7 @@ def test_integration_ps_psf_variation_stamps_var(
 
     # extract stamps, measure variation in output objects
     centers = (
-        np.linspace(-s.pos_width, s.pos_width, 5) / s.pixelscale + s.im_cen)
+        np.linspace(-s.pos_width, s.pos_width, 5) / s.scale + s.im_cen)
     ssize = 17
     scen = (ssize - 1) / 2
     data = []
@@ -94,7 +94,7 @@ def test_integration_ps_psf_variation_stamps_var(
             yll = int(yc - scen + 1)
             stamp = galsim.ImageD(
                 mbobs[0][0].image[yll:yll+ssize, xll:xll+ssize].copy(),
-                scale=s.pixelscale)
+                scale=s.scale)
             data.append(_get_fwhm_g1g2(stamp))
 
     fwhms, g1, g2 = zip(*data)

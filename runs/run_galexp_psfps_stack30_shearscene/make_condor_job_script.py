@@ -34,7 +34,10 @@ Image_Size       =  1000000
 
 """
 
-N_PATCHES_PER_JOB = 200
+try:
+    from config import N_PATCHES_PER_JOB
+except Exception:
+    N_PATCHES_PER_JOB = 200
 
 
 def _append_job(fp, num, output_dir):
@@ -46,7 +49,10 @@ Queue
 """.format(n_patches=N_PATCHES_PER_JOB, num=num, output_dir=output_dir))
 
 
-n_patches = 10_000_000
+try:
+    from config import N_PATCHES as n_patches
+except Exception:
+    n_patches = 10_000_000
 n_jobs = n_patches // N_PATCHES_PER_JOB
 n_jobs_per_script = 500
 n_scripts = n_jobs // 500

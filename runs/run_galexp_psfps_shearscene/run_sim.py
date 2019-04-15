@@ -5,7 +5,8 @@ import tqdm
 import joblib
 import logging
 
-from mdetsims import Sim, TEST_METADETECT_CONFIG
+from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
+from mdetsims.metacal import MetacalPlusMOF, METACAL_TYPES
 from metadetect.metadetect import Metadetect
 from config import CONFIG
 
@@ -32,45 +33,85 @@ except Exception:
 
     HAVE_MPI = False
 
-
 DO_COMM = False
 
+try:
+    from config import DO_METACAL_MOF
+except Exception:
+    DO_METACAL_MOF = False
 
-def _meas_shear(res):
-    op = res['1p']
-    q = (op['flags'] == 0) & (op['wmom_s2n'] > 10) & (op['wmom_T_ratio'] > 1.2)
-    if not np.any(q):
-        return None
-    g1p = op['wmom_g'][q, 0]
+if DO_METACAL_MOF:
+    def _mask(mof, cat, s2n_cut=10, size_cut=0.5):
+        return (
+            (mof['flags'] == 0) &
+            (cat['mcal_s2n'] > s2n_cut) &
+            (cat['mcal_T_ratio'] > size_cut))
 
-    om = res['1m']
-    q = (om['flags'] == 0) & (om['wmom_s2n'] > 10) & (om['wmom_T_ratio'] > 1.2)
-    if not np.any(q):
-        return None
-    g1m = om['wmom_g'][q, 0]
+    def _meas_shear(res):
+        msks = {}
+        for sh in METACAL_TYPES:
+            msks[sh] = _mask(res['mof'], res[sh])
+            if not np.any(msks[sh]):
+                return None
 
-    o = res['noshear']
-    q = (o['flags'] == 0) & (o['wmom_s2n'] > 10) & (o['wmom_T_ratio'] > 1.2)
-    if not np.any(q):
-        return None
-    g1 = o['wmom_g'][q, 0]
-    g2 = o['wmom_g'][q, 1]
+        g1p = res['1p']['mcal_g'][msks['1p'], 0]
+        g1m = res['1m']['mcal_g'][msks['1m'], 0]
 
-    op = res['2p']
-    q = (op['flags'] == 0) & (op['wmom_s2n'] > 10) & (op['wmom_T_ratio'] > 1.2)
-    if not np.any(q):
-        return None
-    g2p = op['wmom_g'][q, 1]
+        g2p = res['2p']['mcal_g'][msks['2p'], 1]
+        g2m = res['2m']['mcal_g'][msks['2m'], 1]
 
-    op = res['2m']
-    q = (op['flags'] == 0) & (op['wmom_s2n'] > 10) & (op['wmom_T_ratio'] > 1.2)
-    if not np.any(q):
-        return None
-    g2m = op['wmom_g'][q, 1]
+        g1 = res['noshear']['mcal_g'][msks['noshear'], 0]
+        g2 = res['noshear']['mcal_g'][msks['noshear'], 1]
 
-    return (
-        np.mean(g1p), np.mean(g1m), np.mean(g1),
-        np.mean(g2p), np.mean(g2m), np.mean(g2))
+        return (
+            np.mean(g1p), np.mean(g1m), np.mean(g1),
+            np.mean(g2p), np.mean(g2m), np.mean(g2))
+else:
+    def _meas_shear(res):
+        op = res['1p']
+        q = ((op['flags'] == 0) &
+             (op['wmom_s2n'] > 10) &
+             (op['wmom_T_ratio'] > 1.2))
+        if not np.any(q):
+            return None
+        g1p = op['wmom_g'][q, 0]
+
+        om = res['1m']
+        q = ((om['flags'] == 0) &
+             (om['wmom_s2n'] > 10) &
+             (om['wmom_T_ratio'] > 1.2))
+        if not np.any(q):
+            return None
+        g1m = om['wmom_g'][q, 0]
+
+        o = res['noshear']
+        q = ((o['flags'] == 0) &
+             (o['wmom_s2n'] > 10) &
+             (o['wmom_T_ratio'] > 1.2))
+        if not np.any(q):
+            return None
+        g1 = o['wmom_g'][q, 0]
+        g2 = o['wmom_g'][q, 1]
+
+        op = res['2p']
+        q = ((op['flags'] == 0) &
+             (op['wmom_s2n'] > 10) &
+             (op['wmom_T_ratio'] > 1.2))
+        if not np.any(q):
+            return None
+        g2p = op['wmom_g'][q, 1]
+
+        op = res['2m']
+        q = ((op['flags'] == 0) &
+             (op['wmom_s2n'] > 10) &
+             (op['wmom_T_ratio'] > 1.2))
+        if not np.any(q):
+            return None
+        g2m = op['wmom_g'][q, 1]
+
+        return (
+            np.mean(g1p), np.mean(g1m), np.mean(g1),
+            np.mean(g2p), np.mean(g2m), np.mean(g2))
 
 
 def _cut(prr, mrr):
@@ -121,43 +162,77 @@ def _fit_m(prr, mrr):
         np.mean(y2) / np.mean(x2), np.std(cvals))
 
 
-def _run_sim_mdet(seed):
-    try:
-        config = {}
-        config.update(TEST_METADETECT_CONFIG)
+def _run_sim(seed):
+    if DO_METACAL_MOF:
+        try:
+            config = {}
+            config.update(TEST_METACAL_MOF_CONFIG)
 
-        rng = np.random.RandomState(seed=seed + 1000000)
-        sim = Sim(rng=rng, g1=0.02, **CONFIG)
-        mbobs = sim.get_mbobs()
-        md = Metadetect(config, mbobs, rng)
-        md.go()
-        pres = _meas_shear(md.result)
+            rng = np.random.RandomState(seed=seed + 1000000)
+            sim = Sim(rng=rng, g1=0.02, **CONFIG)
+            mbobs = sim.get_mbobs()
+            md = MetacalPlusMOF(config, mbobs, rng)
+            md.go()
+            pres = _meas_shear(md.result)
 
-        dens = len(md.result['noshear']) / sim.area_sqr_arcmin
-        LOGGER.info('found %f objects per square arcminute', dens)
+            dens = len(md.result['noshear']) / sim.area_sqr_arcmin
+            LOGGER.info('found %f objects per square arcminute', dens)
 
-        rng = np.random.RandomState(seed=seed + 1000000)
-        sim = Sim(rng=rng, g1=-0.02, **CONFIG)
-        mbobs = sim.get_mbobs()
-        md = Metadetect(config, mbobs, rng)
-        md.go()
-        mres = _meas_shear(md.result)
+            rng = np.random.RandomState(seed=seed + 1000000)
+            sim = Sim(rng=rng, g1=-0.02, **CONFIG)
+            mbobs = sim.get_mbobs()
+            md = MetacalPlusMOF(config, mbobs, rng)
+            md.go()
+            mres = _meas_shear(md.result)
 
-        dens = len(md.result['noshear']) / sim.area_sqr_arcmin
-        LOGGER.info('found %f objects per square arcminute', dens)
+            dens = len(md.result['noshear']) / sim.area_sqr_arcmin
+            LOGGER.info('found %f objects per square arcminute', dens)
 
-        return pres, mres
-    except Exception:
-        return None, None
+            return pres, mres
+        except Exception as e:
+            print(repr(e))
+            return None, None
+    else:
+        try:
+            config = {}
+            config.update(TEST_METADETECT_CONFIG)
+
+            rng = np.random.RandomState(seed=seed + 1000000)
+            sim = Sim(rng=rng, g1=0.02, **CONFIG)
+            mbobs = sim.get_mbobs()
+            md = Metadetect(config, mbobs, rng)
+            md.go()
+            pres = _meas_shear(md.result)
+
+            dens = len(md.result['noshear']) / sim.area_sqr_arcmin
+            LOGGER.info('found %f objects per square arcminute', dens)
+
+            rng = np.random.RandomState(seed=seed + 1000000)
+            sim = Sim(rng=rng, g1=-0.02, **CONFIG)
+            mbobs = sim.get_mbobs()
+            md = Metadetect(config, mbobs, rng)
+            md.go()
+            mres = _meas_shear(md.result)
+
+            dens = len(md.result['noshear']) / sim.area_sqr_arcmin
+            LOGGER.info('found %f objects per square arcminute', dens)
+
+            return pres, mres
+        except Exception as e:
+            print(repr(e))
+            return None, None
 
 
-print('running metadetect', flush=True)
+if DO_METACAL_MOF:
+    print('running metacal+MOF', flush=True)
+else:
+    print('running metadetect', flush=True)
 print('config:', CONFIG, flush=True)
 
 n_sims = int(sys.argv[1])
 offset = rank * n_sims
 
-sims = [joblib.delayed(_run_sim_mdet)(i + offset) for i in range(n_sims)]
+sims = [joblib.delayed(_run_sim)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
     verbose=20,
     n_jobs=-1 if n_sims > 1 else 1,
