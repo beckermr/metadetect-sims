@@ -1,8 +1,6 @@
 import numpy as np
 import esutil as eu
 
-import ngmix
-
 from metadetect.detect import MEDSifier
 from .util import get_masked_frac
 from .fofs import get_fofs
