@@ -28,6 +28,8 @@ class Sim(dict):
         The kind of galaxy to simulate.
     psf_type : str
         The kind of PSF to simulate.
+    scale : float
+        The pixel scale of the image.
     shear_scene : bool, optional
         Whether or not to shear the full scene.
     n_coadd : int, optional
@@ -147,14 +149,14 @@ class Sim(dict):
             seed=self.rng.randint(low=1, high=2**32-1))
 
         # typical pixel scale
-        self.pixelscale = scale
-        self.wcs = galsim.PixelScale(self.pixelscale)
+        self.scale = scale
+        self.wcs = galsim.PixelScale(self.scale)
 
         # frac of a single dimension that is used for drawing objects
         frac = 1.0 - self.buff * 2 / self.dim
 
         # half of the width of center of the patch that has objects
-        self.pos_width = self.dim * frac * 0.5 * self.pixelscale
+        self.pos_width = self.dim * frac * 0.5 * self.scale
 
         # for wldeblend galaxies, we have to adjust some of the input
         # parameters since they are computed self consisently from the
@@ -166,7 +168,7 @@ class Sim(dict):
         # compute the number we actually need
         self.nobj = int(
             self.ngal *
-            (self.dim * self.pixelscale / 60 * frac)**2)
+            (self.dim * self.scale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
 
@@ -215,6 +217,7 @@ class Sim(dict):
 
             pars['survey_name'] = survey_name
             pars['filter_band'] = band
+            pars['pixel_scale'] = self.scale
 
             # note in the way we call the descwl package, the image width
             # and height is not actually used
@@ -288,8 +291,8 @@ class Sim(dict):
             # get the offset of the center
             dx = pos.x - (x_ll + (_im.shape[1] - 1)/2)
             dy = pos.y - (y_ll + (_im.shape[0] - 1)/2)
-            dx *= self.pixelscale
-            dy *= self.pixelscale
+            dx *= self.scale
+            dy *= self.scale
 
             # draw and set the proper origin
             stamp = obj.shift(dx=dx, dy=dy).drawImage(
@@ -486,8 +489,8 @@ class Sim(dict):
                 sdy = dy
 
             pos = galsim.PositionD(
-                x=sdx / self.pixelscale + self.im_cen,
-                y=sdy / self.pixelscale + self.im_cen)
+                x=sdx / self.scale + self.im_cen,
+                y=sdy / self.scale + self.im_cen)
 
             # get the PSF info
             _, _psf_wcs, _, _psf, _ = self._render_psf_image(
@@ -509,7 +512,7 @@ class Sim(dict):
                     rng=self.rng,
                     im_width=self.dim,
                     buff=self.dim/2,
-                    scale=self.pixelscale,
+                    scale=self.scale,
                     **kwargs)
                 for _ in range(self.n_coadd_psf)]
             LOGGER.debug('stacking %d power spectrum psfs', self.n_coadd_psf)
