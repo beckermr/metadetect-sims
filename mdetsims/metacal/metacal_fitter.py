@@ -75,7 +75,14 @@ class MetacalFitter(FitterBase):
             mof_data, epochs_data = self.mof_fitter.go(mbobs_list)
             if mof_data is None or epochs_data is None:
                 self._result = None
+                return None
             fitter = self.mof_fitter.get_mof_fitter()
+
+            # test if the fitter worked
+            res = fitter.get_result()
+            if res['flags'] != 0:
+                self._result = None
+                return None
 
             # this gets all objects, all bands in a list of MultiBandObsList
             mbobs_list_mcal = fitter.make_corrected_obs()

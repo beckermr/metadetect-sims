@@ -34,7 +34,7 @@ SX_CONFIG = {
 
 MEDS_CONFIG = {
     'min_box_size': 32,
-    'max_box_size': 256,
+    'max_box_size': 64,
 
     'box_type': 'iso_radius',
 
@@ -103,6 +103,8 @@ TEST_METACAL_MOF_CONFIG = {
         # arcsec
         'extra_psf_fwhm_arcsec': 0.0
     },
+
+    'weight_type': 'uberseg',
 
     'mof': {
         'model': 'bdf',

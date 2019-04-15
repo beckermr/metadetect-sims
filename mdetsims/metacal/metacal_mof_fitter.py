@@ -72,7 +72,8 @@ class MetacalPlusMOF(object):
 
             list_of_mbobs = []
             for ind in inds:
-                o = self._mbmeds.get_mbobs(ind)
+                o = self._mbmeds.get_mbobs(
+                    ind, weight_type=self.conf['weight_type'])
                 o.meta['id'] = ind
                 o.meta['fofid'] = fofid
                 o.meta['masked_frac'] = get_masked_frac(o)
@@ -87,12 +88,8 @@ class MetacalPlusMOF(object):
                 self.conf, nband, self.rng,
                 mof_fitter=MOFFitter(self.conf, nband, self.rng))
 
-            try:
-                mcal.go(list_of_mbobs)
-                res = mcal.result
-            except ngmix.gexceptions.GMixRangeError as e:
-                print(repr(e))
-                res = None
+            mcal.go(list_of_mbobs)
+            res = mcal.result
 
             if res is not None:
                 data.append(res)
