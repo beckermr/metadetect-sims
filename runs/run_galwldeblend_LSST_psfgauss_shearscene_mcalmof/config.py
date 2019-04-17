@@ -2,7 +2,7 @@ CONFIG = {
     'gal_type': 'wldeblend',
     'psf_type': 'gauss',
     'shear_scene': True,
-    'n_coadd': 900,
+    'n_coadd': 1,
     'scale': 0.2,
     'dim': 300,
     'n_coadd_psf': 1,
