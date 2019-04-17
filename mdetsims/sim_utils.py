@@ -209,7 +209,7 @@ class Sim(dict):
         self._surveys = {}
         self._builders = {}
         noise_var = 0.0
-        for band in ['r', 'i', 'z']:
+        for band in ['g', 'r', 'i']:  # ['r', 'i', 'z']:
             # make the survey and code to build galaxies from it
             pars = descwl.survey.Survey.get_defaults(
                 survey_name=survey_name,
@@ -229,7 +229,7 @@ class Sim(dict):
             pars['psf_model'] = galsim.Gaussian(fwhm=0.7)
 
             # we fix the exposure time and adjust the noise
-            pars['exposure_time'] = exptime
+            # pars['exposure_time'] = exptime
 
             self._surveys[band] = descwl.survey.Survey(**pars)
             self._builders[band] = descwl.model.GalaxyBuilder(
@@ -247,10 +247,11 @@ class Sim(dict):
         # distributed over r i and z
 
         # rescale noise variance for a mean image in the bands
-        noise_var /= len(self._builders)
+        # noise_var /= len(self._builders)
 
         # now we stack n_coadd / n_bands of those
-        self.noise = np.sqrt(noise_var / (self.n_coadd / len(self._builders)))
+        # self.noise = np.sqrt(noise_var / (self.n_coadd / len(self._builders)))
+        self.noise = np.sqrt(noise_var / len(self._builders))
 
         # when we sample from the catalog, we need to pull the right number
         # of objects. Since the default catalog is one square degree
