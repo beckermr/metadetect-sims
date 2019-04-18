@@ -235,10 +235,13 @@ outputs = []
 for i in tqdm.trange(n_sims):
     if i % n_ranks == rank:
         outputs.append(_run_sim(i))
+        print("%04d: %d" % (rank, i), flush=True)
 
 pres, mres = zip(*outputs)
 
 pres, mres = _cut(pres, mres)
+
+print("%04d: done" % rank, flush=True)
 
 if comm is not None and DO_COMM:
     if rank == 0:
