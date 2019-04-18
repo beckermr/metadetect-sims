@@ -258,7 +258,7 @@ if comm is not None and DO_COMM:
     else:
         comm.send((pres, mres), dest=0, tag=rank)
 else:
-    with open('data%d.pkl' % rank, 'wb') as fp:
+    with open('data%04d.pkl' % rank, 'wb') as fp:
         pickle.dump((pres, mres), fp)
 
 if HAVE_MPI:
@@ -266,12 +266,13 @@ if HAVE_MPI:
 
 if rank == 0:
     if not DO_COMM:
+        print("%04d: reading rsults" % rank, flush=True)
         for i in range(1, n_ranks):
-            with open('data%d.pkl' % i, 'rb') as fp:
+            with open('data%04d.pkl' % i, 'rb') as fp:
                 data = pickle.load(fp)
                 pres.extend(data[0])
                 mres.extend(data[1])
-
+        print("%04d: done reading rsults" % rank, flush=True)
     m, msd, c, csd = _fit_m(pres, mres)
 
     print("""\
