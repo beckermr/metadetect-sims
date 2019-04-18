@@ -35,7 +35,7 @@ except Exception:
 
     HAVE_MPI = False
 
-DO_COMM = True
+DO_COMM = False
 
 try:
     from config import DO_METACAL_MOF
@@ -253,7 +253,7 @@ if comm is not None and DO_COMM:
             pres.extend(data[0])
             mres.extend(data[1])
     else:
-        comm.send((pres, mres), dest=0, tag=0)
+        comm.send((pres, mres), dest=0, tag=rank)
 else:
     with open('data%d.pkl' % rank, 'wb') as fp:
         pickle.dump((pres, mres), fp)
