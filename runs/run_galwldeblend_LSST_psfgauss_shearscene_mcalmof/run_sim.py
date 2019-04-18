@@ -225,14 +225,17 @@ def _run_sim(seed):
             return None, None
 
 
-if DO_METACAL_MOF:
-    print('running metacal+MOF', flush=True)
-else:
-    print('running metadetect', flush=True)
-print('config:', CONFIG, flush=True)
+if rank == 0:
+    if DO_METACAL_MOF:
+        print('running metacal+MOF', flush=True)
+    else:
+        print('running metadetect', flush=True)
+    print('config:', CONFIG, flush=True)
+
+    print("%04d: n_ranks = %d" % (rank, n_ranks), flush=True)
 
 outputs = []
-for i in tqdm.trange(n_sims):
+for i in range(n_sims):
     if i % n_ranks == rank:
         outputs.append(_run_sim(i))
         print("%04d: %d" % (rank, i), flush=True)
