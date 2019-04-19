@@ -1,8 +1,10 @@
 import sys
-import pickle
 import numpy as np
 import tqdm
+import schwimmbad
+import multiprocessing
 import logging
+import time
 
 from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
 from mdetsims.metacal import MetacalPlusMOF, METACAL_TYPES
@@ -21,9 +23,10 @@ if n_sims == 1:
 
 LOGGER = logging.getLogger(__name__)
 
+START = time.time()
+
 try:
     from mpi4py import MPI
-
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     n_ranks = comm.Get_size()
@@ -32,10 +35,14 @@ except Exception:
     n_ranks = 1
     rank = 0
     comm = None
-
     HAVE_MPI = False
 
-DO_COMM = False
+if HAVE_MPI and n_ranks > 1:
+    n_workers = n_ranks if n_sims > 1 else 1
+else:
+    n_workers = multiprocessing.cpu_count() if n_sims > 1 else 1
+
+USE_MPI = HAVE_MPI and n_ranks > 1
 
 try:
     from config import DO_METACAL_MOF
@@ -190,10 +197,10 @@ def _run_sim(seed):
             dens = len(md.result['noshear']) / sim.area_sqr_arcmin
             LOGGER.info('found %f objects per square arcminute', dens)
 
-            return pres, mres
+            retvals = (pres, mres)
         except Exception as e:
             print(repr(e))
-            return None, None
+            retvals = (None, None)
     else:
         try:
             config = {}
@@ -219,10 +226,15 @@ def _run_sim(seed):
             dens = len(md.result['noshear']) / sim.area_sqr_arcmin
             LOGGER.info('found %f objects per square arcminute', dens)
 
-            return pres, mres
+            retvals = (pres, mres)
         except Exception as e:
             print(repr(e))
-            return None, None
+            retvals = (None, None)
+    if USE_MPI:
+        print(
+            "[% 10ds] %04d: %d" % (time.time() - START, rank, seed),
+            flush=True)
+    return retvals
 
 
 if rank == 0:
@@ -231,51 +243,22 @@ if rank == 0:
     else:
         print('running metadetect', flush=True)
     print('config:', CONFIG, flush=True)
+    print('use mpi:', USE_MPI, flush=True)
+    print("n_ranks:", n_ranks, flush=True)
+    print("n_workers:", n_workers, flush=True)
 
-    print("%04d: n_ranks = %d" % (rank, n_ranks), flush=True)
-
-outputs = []
-for i in range(n_sims):
-    if i % n_ranks == rank:
-        outputs.append(_run_sim(i))
-        print("%04d: %d" % (rank, i), flush=True)
+if not USE_MPI:
+    pool = schwimmbad.JoblibPool(
+        n_workers, backend='multiprocessing', verbose=100)
+else:
+    pool = schwimmbad.choose_pool(mpi=USE_MPI, processes=n_workers)
+outputs = pool.map(_run_sim, range(n_sims))
+pool.close()
 
 pres, mres = zip(*outputs)
-
 pres, mres = _cut(pres, mres)
 
-print("%04d: done" % rank, flush=True)
-
-if comm is not None and DO_COMM:
-    if rank == 0:
-        n_recv = 0
-        while n_recv < n_ranks - 1:
-            status = MPI.Status()
-            data = comm.recv(
-                source=MPI.ANY_SOURCE,
-                tag=MPI.ANY_TAG,
-                status=status)
-            n_recv += 1
-            pres.extend(data[0])
-            mres.extend(data[1])
-    else:
-        comm.send((pres, mres), dest=0, tag=rank)
-else:
-    with open('data%04d.pkl' % rank, 'wb') as fp:
-        pickle.dump((pres, mres), fp)
-
-if HAVE_MPI:
-    comm.Barrier()
-
 if rank == 0:
-    if not DO_COMM:
-        print("%04d: reading rsults" % rank, flush=True)
-        for i in range(1, n_ranks):
-            with open('data%04d.pkl' % i, 'rb') as fp:
-                data = pickle.load(fp)
-                pres.extend(data[0])
-                mres.extend(data[1])
-        print("%04d: done reading rsults" % rank, flush=True)
     m, msd, c, csd = _fit_m(pres, mres)
 
     print("""\

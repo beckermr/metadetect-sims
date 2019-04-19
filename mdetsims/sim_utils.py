@@ -9,7 +9,6 @@ import fitsio
 
 from .psf_homogenizer import PSFHomogenizer
 from .ps_psf import PowerSpectrumPSF
-from .real_psf import RealPSF
 from .masking import generate_bad_columns, generate_cosmic_rays
 from .interp import interpolate_image_and_noise
 from .symmetrize import symmetrize_bad_mask
@@ -80,7 +79,7 @@ class Sim(dict):
     -------
     get_mbobs()
         Make a simulated MultiBandObsList for metadetect.
-    get_psf_obs(*, x, y):
+    get_psf_obs(*, x, y, n_bands, band):
         Get an ngmix Observation of the PSF at the position (x, y).
 
     Attributes
@@ -103,9 +102,6 @@ class Sim(dict):
         'gauss' : a FWHM 0.9 arcsecond Gaussian
         'ps' : a PSF from power spectrum model for shape variation and
             cubic model for size variation
-        'real' : a PSF model drawn randomly from a model of the atmosphere
-            and optics in a set of files
-        'piff' : a PSF model drawn randomly from a set of piff files
     """
     def __init__(
             self, *,
@@ -133,7 +129,9 @@ class Sim(dict):
         self.shear_scene = shear_scene
         self.dim = dim
         self.buff = buff
-        self.noise = noise / np.sqrt(self.n_coadd)
+        # assumed to be one band unless otherwise specified via the
+        # galaxy type
+        self.noise = [noise / np.sqrt(self.n_coadd)]
         self.ngal = ngal
         self.gal_grid = gal_grid
         self.im_cen = (dim - 1) / 2
@@ -206,10 +204,10 @@ class Sim(dict):
         else:
             exptime = None
 
-        self._surveys = {}
-        self._builders = {}
-        noise_var = 0.0
-        for band in ['g', 'r', 'i']:  # ['r', 'i', 'z']:
+        self._surveys = []
+        self._builders = []
+        noises = []
+        for iband, band in enumerate(gal_kws.get('bands', ['r', 'i', 'z'])):
             # make the survey and code to build galaxies from it
             pars = descwl.survey.Survey.get_defaults(
                 survey_name=survey_name,
@@ -224,34 +222,21 @@ class Sim(dict):
             pars['image_width'] = self.dim
             pars['image_height'] = self.dim
 
-            # the psf not actually used for anything given how we call the
-            # descwl package
-            pars['psf_model'] = galsim.Gaussian(fwhm=0.7)
+            # reset the exposure times if we want
+            if not gal_kws.get('use_wldeblend_depth', False):
+                pars['exposure_time'] = exptime * self.n_coadd
 
-            # we fix the exposure time and adjust the noise
-            # pars['exposure_time'] = exptime
-
-            self._surveys[band] = descwl.survey.Survey(**pars)
-            self._builders[band] = descwl.model.GalaxyBuilder(
-                survey=self._surveys[band],
+            self._surveys.append(descwl.survey.Survey(**pars))
+            self._builders.append(descwl.model.GalaxyBuilder(
+                survey=self._surveys[iband],
                 no_disk=False,
                 no_bulge=False,
                 no_agn=False,
-                verbose_model=False)
+                verbose_model=False))
 
-            noise_var += self._surveys[band].mean_sky_level
+            noises.append(np.sqrt(self._surveys[iband].mean_sky_level))
 
-        # now we reset the noise using the internal sky level appropriate
-        # for the internal units
-        # we are using stack of n_coadd total images equally
-        # distributed over r i and z
-
-        # rescale noise variance for a mean image in the bands
-        # noise_var /= len(self._builders)
-
-        # now we stack n_coadd / n_bands of those
-        # self.noise = np.sqrt(noise_var / (self.n_coadd / len(self._builders)))
-        self.noise = np.sqrt(noise_var / len(self._builders))
+        self.noise = noises
 
         # when we sample from the catalog, we need to pull the right number
         # of objects. Since the default catalog is one square degree
@@ -269,78 +254,83 @@ class Sim(dict):
         """
         all_band_obj, positions = self._get_band_objects()
 
-        mbobs = ngmix.MultiBandObsList()
+        n_bands = len(all_band_obj[0])
 
         _, _, _, _, method = self._render_psf_image(
-            x=self.im_cen, y=self.im_cen)
+            x=self.im_cen, y=self.im_cen, n_bands=n_bands)
 
-        im = galsim.ImageD(nrow=self.dim, ncol=self.dim, xmin=0, ymin=0)
+        mbobs = ngmix.MultiBandObsList()
 
-        band_objects = [o[0] for o in all_band_obj]
-        for obj, pos in zip(band_objects, positions):
-            # draw with setup_only to get the image size
-            _im = obj.drawImage(
-                wcs=self.wcs,
-                method=method,
-                setup_only=True).array
-            assert _im.shape[0] == _im.shape[1]
+        for band in range(n_bands):
 
-            # now get location of the stamp
-            x_ll = int(pos.x - (_im.shape[1] - 1)/2)
-            y_ll = int(pos.y - (_im.shape[0] - 1)/2)
+            im = galsim.ImageD(nrow=self.dim, ncol=self.dim, xmin=0, ymin=0)
 
-            # get the offset of the center
-            dx = pos.x - (x_ll + (_im.shape[1] - 1)/2)
-            dy = pos.y - (y_ll + (_im.shape[0] - 1)/2)
-            dx *= self.scale
-            dy *= self.scale
+            band_objects = [o[band] for o in all_band_obj]
+            for obj, pos in zip(band_objects, positions):
+                # draw with setup_only to get the image size
+                _im = obj.drawImage(
+                    wcs=self.wcs,
+                    method=method,
+                    setup_only=True).array
+                assert _im.shape[0] == _im.shape[1]
 
-            # draw and set the proper origin
-            stamp = obj.shift(dx=dx, dy=dy).drawImage(
-                nx=_im.shape[1],
-                ny=_im.shape[0],
-                wcs=self.wcs,
-                method=method)
-            stamp.setOrigin(x_ll, y_ll)
+                # now get location of the stamp
+                x_ll = int(pos.x - (_im.shape[1] - 1)/2)
+                y_ll = int(pos.y - (_im.shape[0] - 1)/2)
 
-            # intersect and add to total image
-            overlap = stamp.bounds & im.bounds
-            im[overlap] += stamp[overlap]
+                # get the offset of the center
+                dx = pos.x - (x_ll + (_im.shape[1] - 1)/2)
+                dy = pos.y - (y_ll + (_im.shape[0] - 1)/2)
+                dx *= self.scale
+                dy *= self.scale
 
-        im = im.array.copy()
+                # draw and set the proper origin
+                stamp = obj.shift(dx=dx, dy=dy).drawImage(
+                    nx=_im.shape[1],
+                    ny=_im.shape[0],
+                    wcs=self.wcs,
+                    method=method)
+                stamp.setOrigin(x_ll, y_ll)
 
-        im += self.noise_rng.normal(scale=self.noise, size=im.shape)
-        wt = im*0 + 1.0/self.noise**2
-        bmask = np.zeros(im.shape, dtype='i4')
-        noise = self.noise_rng.normal(size=im.shape) / np.sqrt(wt)
+                # intersect and add to total image
+                overlap = stamp.bounds & im.bounds
+                im[overlap] += stamp[overlap]
 
-        if self.mask_and_interp:
-            im, noise, bmask = self._mask_and_interp(im, noise)
+            im = im.array.copy()
 
-        galsim_jac = self._get_local_jacobian(x=self.im_cen, y=self.im_cen)
+            im += self.noise_rng.normal(scale=self.noise[band], size=im.shape)
+            wt = im*0 + 1.0/self.noise[band]**2
+            bmask = np.zeros(im.shape, dtype='i4')
+            noise = self.noise_rng.normal(size=im.shape) / np.sqrt(wt)
 
-        psf_obs = self.get_psf_obs(x=self.im_cen, y=self.im_cen)
+            if self.mask_and_interp:
+                im, noise, bmask = self._mask_and_interp(im, noise)
 
-        if self.homogenize_psf:
-            im, noise, psf_img = self._homogenize_psf(im, noise)
-            psf_obs.set_image(psf_img)
+            galsim_jac = self._get_local_jacobian(x=self.im_cen, y=self.im_cen)
 
-        jac = ngmix.jacobian.Jacobian(
-            row=self.im_cen,
-            col=self.im_cen,
-            wcs=galsim_jac)
+            psf_obs = self.get_psf_obs(
+                x=self.im_cen, y=self.im_cen, n_bands=n_bands, band=band)
 
-        obs = ngmix.Observation(
-            im,
-            weight=wt,
-            bmask=bmask,
-            jacobian=jac,
-            psf=psf_obs,
-            noise=noise)
+            if self.homogenize_psf:
+                im, noise, psf_img = self._homogenize_psf(im, noise)
+                psf_obs.set_image(psf_img)
 
-        obslist = ngmix.ObsList()
-        obslist.append(obs)
-        mbobs.append(obslist)
+            jac = ngmix.jacobian.Jacobian(
+                row=self.im_cen,
+                col=self.im_cen,
+                wcs=galsim_jac)
+
+            obs = ngmix.Observation(
+                im,
+                weight=wt,
+                bmask=bmask,
+                jacobian=jac,
+                psf=psf_obs,
+                noise=noise)
+
+            obslist = ngmix.ObsList()
+            obslist.append(obs)
+            mbobs.append(obslist)
 
         return mbobs
 
@@ -414,7 +404,7 @@ class Sim(dict):
             n=1,
         ).withFlux(flux)
 
-        return obj
+        return [obj]
 
     def _get_gal_ground_galsim_parametric(self):
         if not hasattr(self, '_cosmo_cat'):
@@ -430,24 +420,20 @@ class Sim(dict):
             (2.4**2 * (1.0 - 0.33**2)) *
             90
         )
-        return gal
+        return [gal]
 
     def _get_gal_wldeblend(self):
         rind = self.rng.choice(self._wldeblend_cat.size)
         angle = self.rng.uniform() * 360
 
-        # we divide by the number of bands here since we are averaging over
-        # n_coadd / n_bands images per band and then normalizing by n_coadd
-        gal = galsim.Sum(
-            [self._builders[band].from_catalog(
+        gals = [
+            self._builders[band].from_catalog(
                 self._wldeblend_cat[rind], 0, 0,
-                self._surveys[band].filter_band).model
-             for band in self._builders]) / len(self._builders)
+                self._surveys[band].filter_band).model.rotate(
+                    angle * galsim.degrees)
+            for band in range(len(self._builders))]
 
-        # apply an extra rotation
-        gal = gal.rotate(angle * galsim.degrees)
-
-        return gal
+        return gals
 
     def _get_band_objects(self):
         """Get a list of effective PSF-convolved galsim images w/ their
@@ -474,11 +460,11 @@ class Sim(dict):
 
             # get the galaxy
             if self.gal_type == 'exp':
-                gal = self._get_gal_exp()
+                gals = self._get_gal_exp()
             elif self.gal_type == 'ground_galsim_parametric':
-                gal = self._get_gal_ground_galsim_parametric()
+                gals = self._get_gal_ground_galsim_parametric()
             elif self.gal_type == 'wldeblend':
-                gal = self._get_gal_wldeblend()
+                gals = self._get_gal_wldeblend()
             else:
                 raise ValueError('gal_type "%s" not valid!' % self.gal_type)
 
@@ -494,98 +480,78 @@ class Sim(dict):
                 y=sdy / self.scale + self.im_cen)
 
             # get the PSF info
-            _, _psf_wcs, _, _psf, _ = self._render_psf_image(
-                x=pos.x, y=pos.y)
+            _, _psf_wcs, _, _psfs, _ = self._render_psf_image(
+                x=pos.x, y=pos.y, n_bands=len(gals))
 
             # shear, shift, and then convolve the galaxy
-            gal = gal.shear(g1=self.g1, g2=self.g2)
-            gal = galsim.Convolve(gal, _psf)
+            _obj = []
+            for gal, _psf in zip(gals, _psfs):
+                gal = gal.shear(g1=self.g1, g2=self.g2)
+                gal = galsim.Convolve(gal, _psf)
+                _obj.append(gal)
 
-            all_band_obj.append([gal])
+            all_band_obj.append(_obj)
             positions.append(pos)
 
         return all_band_obj, positions
 
-    def _stack_ps_psfs(self, *, x, y, **kwargs):
+    def _stack_ps_psfs(self, *, x, y, n_bands, **kwargs):
         if not hasattr(self, '_psfs'):
-            self._psfs = [
-                PowerSpectrumPSF(
-                    rng=self.rng,
-                    im_width=self.dim,
-                    buff=self.dim/2,
-                    scale=self.scale,
-                    **kwargs)
-                for _ in range(self.n_coadd_psf)]
+            self._psfs = [[
+                    PowerSpectrumPSF(
+                        rng=self.rng,
+                        im_width=self.dim,
+                        buff=self.dim/2,
+                        scale=self.scale,
+                        **kwargs)
+                    for _ in range(self.n_coadd_psf)]
+                for _ in range(n_bands)]
+
             LOGGER.debug('stacking %d power spectrum psfs', self.n_coadd_psf)
 
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
-        psf = galsim.Sum([
-            p.getPSF(galsim.PositionD(x=x, y=y))
-            for p in self._psfs]).withFlux(1)
-        psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
-        psf_im /= np.sum(psf_im)
+        psfs = []
+        psf_ims = []
+        for i in range(n_bands):
+            psf = galsim.Sum([
+                p.getPSF(galsim.PositionD(x=x, y=y))
+                for p in self._psfs[i]]).withFlux(1)
+            psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
+            psf_im /= np.sum(psf_im)
 
-        return psf, psf_im
+            psfs.append(psf)
+            psf_ims.append(psf_im)
 
-    def _stack_real_psfs(self, *, x, y, filenames):
-        if not hasattr(self, '_psfs'):
-            fnames = self.rng.choice(
-                filenames, size=self.n_coadd_psf, replace=False)
-            self._psfs = [RealPSF(fname) for fname in fnames]
-            LOGGER.debug('stacking %d real psfs', self.n_coadd_psf)
+        return psfs, psf_ims
 
+    def _get_wldeblend_psfs(self, *, x, y):
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
-        psf = galsim.Sum([
-            p.getPSF(galsim.PositionD(x=x, y=y))
-            for p in self._psfs]).withFlux(1)
-        psf_im = psf.drawImage(
-            nx=21, ny=21, wcs=_psf_wcs, method='no_pixel').array.copy()
-        psf_im /= np.sum(psf_im)
+        psfs = []
+        psf_ims = []
+        for i in range(len(self._surveys)):
+            psfs.append(self._surveys[i].psf_model)
+            psf_im = psfs[-1].drawImage(
+                nx=21, ny=21, wcs=_psf_wcs).array.copy()
+            psf_im /= np.sum(psf_im)
+            psf_ims.append(psf_im)
 
-        return psf, psf_im
+        return psfs, psf_ims
 
-    def _stack_piff_psfs(self, *, x, y, filenames):
-        # import so we don't require piff to run the code
-        import piff
-
-        if not hasattr(self, '_psfs'):
-            fnames = self.rng.choice(
-                filenames, size=self.n_coadd_psf, replace=False)
-            self._psfs = [piff.PSF.read(fname) for fname in fnames]
-            LOGGER.debug('stacking %d piff psfs', self.n_coadd_psf)
-
-        wcs = self._get_local_jacobian(x=x, y=y)
-
-        image = galsim.ImageD(ncol=17, nrow=17, wcs=wcs)
-        for psf in self._psfs:
-            _image = galsim.ImageD(ncol=17, nrow=17, wcs=wcs)
-            _image = psf.draw(
-                x=int(x+0.5),
-                y=int(y+0.5),
-                image=_image)
-            image += _image
-        psf_im = image.array
-        psf_im /= np.sum(psf_im)
-
-        psf = galsim.InterpolatedImage(galsim.ImageD(psf_im), wcs=wcs)
-
-        return psf, psf_im
-
-    def _render_psf_image(self, *, x, y):
+    def _render_psf_image(self, *, x, y, n_bands):
         """Render the PSF image.
 
         Returns
         -------
-        psf_image : array-like
-            The pixel-convolved (i.e. effective) PSF.
+        psf_images : list of array-like
+            The pixel-convolved (i.e. effective) PSF images.
         psf_wcs : galsim.JacobianWCS
             The WCS as a local Jacobian at the PSF center.
-        noise : float
-            An estimate of the noise in the image.
-        psf_gs : galsim.GSObject
-            The PSF as a galsim object.
+        noises : list of floats
+            Estimates of the noise in the images.
+        psf_gs : list of galsim.GSObject
+            The PSFs as galsim objects.
         method : str
             Method to use to render images using this PSF.
         """
@@ -598,28 +564,27 @@ class Sim(dict):
             psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
             psf_im /= np.sum(psf_im)
             method = 'auto'
+            psf_ims = [psf_im] * n_bands
+            psfs = [psf] * n_bands
         elif self.psf_type == 'ps':
             kws = self.psf_kws or {}
-            psf, psf_im = self._stack_ps_psfs(x=x, y=y, **kws)
+            psfs, psf_ims = self._stack_ps_psfs(
+                x=x, y=y, n_bands=n_bands, **kws)
             method = 'auto'
-        elif self.psf_type == 'real':
-            kws = self.psf_kws or {}
-            psf, psf_im = self._stack_real_psfs(x=x, y=y, **kws)
-            method = 'no_pixel'
-        elif self.psf_type == 'piff':
-            kws = self.psf_kws or {}
-            psf, psf_im = self._stack_piff_psfs(x=x, y=y, **kws)
-            method = 'no_pixel'
+        elif self.psf_type == 'wldeblend':
+            psfs, psf_ims = self._get_wldeblend_psfs(x=x, y=y)
+            method = 'auto'
         else:
             raise ValueError('psf_type "%s" not valid!' % self.psf_type)
 
         # set the signal to noise to about 500
         target_s2n = 500.0
-        target_noise = np.sqrt(np.sum(psf_im ** 2) / target_s2n**2)
+        target_noises = np.sqrt(
+            [np.sum(psf_im ** 2) for psf_im in psf_ims]) / target_s2n
 
-        return psf_im, _psf_wcs, target_noise, psf, method
+        return psf_ims, _psf_wcs, target_noises, psfs, method
 
-    def get_psf_obs(self, *, x, y):
+    def get_psf_obs(self, *, x, y, n_bands, band):
         """Get an ngmix Observation of the PSF at a position.
 
         Parameters
@@ -628,21 +593,26 @@ class Sim(dict):
             The column of the PSF.
         y : float
             The row of the PSF.
+        n_bands : int
+            The number of bands.
+        band : int
+            The index of the desired band.
 
         Returns
         -------
         psf_obs : ngmix.Observation
             An Observation of the PSF.
         """
-        psf_image, psf_wcs, noise, _, _ = self._render_psf_image(x=x, y=y)
+        psf_images, psf_wcs, noises, _, _ = self._render_psf_image(
+            x=x, y=y, n_bands=n_bands)
 
-        weight = np.zeros_like(psf_image) + 1.0/noise**2
+        weight = np.zeros_like(psf_images[band]) + 1.0/noises[band]**2
 
-        cen = (np.array(psf_image.shape) - 1.0)/2.0
+        cen = (np.array(psf_images[band].shape) - 1.0)/2.0
         j = ngmix.jacobian.Jacobian(
             row=cen[0], col=cen[1], wcs=psf_wcs)
         psf_obs = ngmix.Observation(
-            psf_image,
+            psf_images[band],
             weight=weight,
             jacobian=j)
 
