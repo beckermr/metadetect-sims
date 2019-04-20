@@ -316,7 +316,8 @@ class Sim(object):
                 x=self.im_cen, y=self.im_cen, n_bands=n_bands, band=band)
 
             if self.homogenize_psf:
-                im, noise, psf_img = self._homogenize_psf(im, noise)
+                im, noise, psf_img = self._homogenize_psf(
+                    im, noise, n_bands, band)
                 psf_obs.set_image(psf_img)
 
             jac = ngmix.jacobian.Jacobian(
@@ -358,14 +359,15 @@ class Sim(object):
 
         return _im, _nse, bad_mask.astype(np.int32)
 
-    def _homogenize_psf(self, im, noise):
+    def _homogenize_psf(self, im, noise, n_bands, band):
         LOGGER.info('applying PSF homogenization')
 
         def _func(row, col):
             psf_im, _, _, _, _ = self._render_psf_image(
                 x=col,
-                y=row)
-            return psf_im
+                y=row,
+                n_bands=n_bands)
+            return psf_im[band]
 
         hmg = PSFHomogenizer(_func, im.shape, patch_size=25, sigma=0.25)
         him = hmg.homogenize_image(im)

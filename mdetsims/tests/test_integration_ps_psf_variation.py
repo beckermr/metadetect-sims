@@ -47,7 +47,7 @@ class GridPSPSFSim(Sim):
             n=1,
         ).withFlux(flux)
 
-        return obj
+        return [obj]
 
     def _get_nobj(self):
         return self.nobj
