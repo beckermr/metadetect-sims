@@ -16,7 +16,7 @@ from .symmetrize import symmetrize_bad_mask
 LOGGER = logging.getLogger(__name__)
 
 
-class Sim(dict):
+class Sim(object):
     """A simple simulation for metadetect testing.
 
     Parameters
@@ -213,6 +213,8 @@ class Sim(dict):
                 survey_name=survey_name,
                 filter_band=band)
 
+            pars['psf_model'] = None
+
             pars['survey_name'] = survey_name
             pars['filter_band'] = band
             pars['pixel_scale'] = self.scale
@@ -244,6 +246,8 @@ class Sim(dict):
         # base source density `ngal`. This is in units of number per
         # square arcminute.
         self.ngal = self._wldeblend_cat.size / (60 * 60)
+
+        LOGGER.info('catalog density: %f per sqr arcmin', self.ngal)
 
     def get_mbobs(self):
         """Make a simulated MultiBandObsList for metadetect.
