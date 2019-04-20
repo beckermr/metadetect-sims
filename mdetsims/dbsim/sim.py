@@ -76,7 +76,7 @@ class ErinsDBSim(object):
         gal_kws = self.gal_kws or {}
         self.conf.update(gal_kws)
         self.conf.update({'psf': psf_kws})
-        LOGGER.error("config: %s", self.conf)
+        LOGGER.debug("config: %s", self.conf)
 
         self.area_sqr_arcmin = self.conf['positions']['width']**2
 
