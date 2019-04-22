@@ -14,14 +14,17 @@ LOGGER = logging.getLogger(__name__)
 
 # based on esheldon/dbsim-config/dbsim-lsstgauss-sall-y5sx-02.yaml
 SIM_CONF = {
+    # commented out since it is set dynamically below
     # 'survey_name': 'LSST',
     'density_fac': 1.0,
+    # commented out since it is set dynamically below
     # 'bands': ['g', 'r', 'i'],
     'image_size_arcmin': 1.3,
     'positions': {
         'type': 'uniform',
         'width': 1.0,
     },
+    # commented out since it is set dynamically below
     # 'psf': {
     #     'type': 'gauss',
     #     'fwhm': 0.8,

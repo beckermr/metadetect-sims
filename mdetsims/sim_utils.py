@@ -137,7 +137,7 @@ class Sim(object):
         self.im_cen = (dim - 1) / 2
         self.psf_kws = psf_kws
         self.gal_kws = gal_kws
-        self.n_coadd_psf = n_coadd_psf or n_coadd
+        self.n_coadd_psf = n_coadd_psf or self.n_coadd
         self.homogenize_psf = homogenize_psf
         self.mask_and_interp = mask_and_interp
 
@@ -173,8 +173,10 @@ class Sim(object):
         if self.gal_grid is not None:
             self.nobj = self.gal_grid * self.gal_grid
 
+        self.n_bands = len(self.noise)
+
     def _extra_init_for_wldeblend(self):
-        # gaurd the import here
+        # guard the import here
         import descwl
 
         # make sure to find the proper catalog
@@ -199,21 +201,28 @@ class Sim(object):
 
         if survey_name == 'DES':
             exptime = 90
+            if self.n_coadd != 10:
+                LOGGER.warning(
+                    'simulating DES with descwl - '
+                    'input n_coadd != 10!')
         elif survey_name == 'LSST':
-            exptime = 15
-        else:
+            LOGGER.debug(
+                'simulating LSST with descwl - ignoring n_coadd input!')
             exptime = None
+        else:
+            raise ValueError("Survey '%s' is not valid!" % survey_name)
+
+        bands = gal_kws.get('bands', ['r', 'i', 'z'])
+        LOGGER.debug('simulating bands: %s', bands)
 
         self._surveys = []
         self._builders = []
         noises = []
-        for iband, band in enumerate(gal_kws.get('bands', ['r', 'i', 'z'])):
+        for iband, band in enumerate(bands):
             # make the survey and code to build galaxies from it
             pars = descwl.survey.Survey.get_defaults(
                 survey_name=survey_name,
                 filter_band=band)
-
-            pars['psf_model'] = None
 
             pars['survey_name'] = survey_name
             pars['filter_band'] = band
@@ -225,9 +234,18 @@ class Sim(object):
             pars['image_height'] = self.dim
 
             # reset the exposure times if we want
-            if not gal_kws.get('use_wldeblend_depth', False):
+            if survey_name == 'DES':
                 pars['exposure_time'] = exptime * self.n_coadd
 
+            # some versions take in the PSF and will complain if it is not
+            # given
+            try:
+                _svy = descwl.survey.Survey(**pars)
+            except Exception:
+                pars['psf_model'] = None
+                _svy = descwl.survey.Survey(**pars)
+
+            self._surveys.append(_svy)
             self._surveys.append(descwl.survey.Survey(**pars))
             self._builders.append(descwl.model.GalaxyBuilder(
                 survey=self._surveys[iband],
@@ -258,14 +276,12 @@ class Sim(object):
         """
         all_band_obj, positions = self._get_band_objects()
 
-        n_bands = len(all_band_obj[0])
-
         _, _, _, _, method = self._render_psf_image(
-            x=self.im_cen, y=self.im_cen, n_bands=n_bands)
+            x=self.im_cen, y=self.im_cen)
 
         mbobs = ngmix.MultiBandObsList()
 
-        for band in range(n_bands):
+        for band in range(self.n_bands):
 
             im = galsim.ImageD(nrow=self.dim, ncol=self.dim, xmin=0, ymin=0)
 
@@ -313,11 +329,11 @@ class Sim(object):
             galsim_jac = self._get_local_jacobian(x=self.im_cen, y=self.im_cen)
 
             psf_obs = self.get_psf_obs(
-                x=self.im_cen, y=self.im_cen, n_bands=n_bands, band=band)
+                x=self.im_cen, y=self.im_cen, band=band)
 
             if self.homogenize_psf:
                 im, noise, psf_img = self._homogenize_psf(
-                    im, noise, n_bands, band)
+                    im, noise, band)
                 psf_obs.set_image(psf_img)
 
             jac = ngmix.jacobian.Jacobian(
@@ -359,14 +375,13 @@ class Sim(object):
 
         return _im, _nse, bad_mask.astype(np.int32)
 
-    def _homogenize_psf(self, im, noise, n_bands, band):
+    def _homogenize_psf(self, im, noise, band):
         LOGGER.info('applying PSF homogenization')
 
         def _func(row, col):
             psf_im, _, _, _, _ = self._render_psf_image(
                 x=col,
-                y=row,
-                n_bands=n_bands)
+                y=row)
             return psf_im[band]
 
         hmg = PSFHomogenizer(_func, im.shape, patch_size=25, sigma=0.25)
@@ -487,7 +502,7 @@ class Sim(object):
 
             # get the PSF info
             _, _psf_wcs, _, _psfs, _ = self._render_psf_image(
-                x=pos.x, y=pos.y, n_bands=len(gals))
+                x=pos.x, y=pos.y)
 
             # shear, shift, and then convolve the galaxy
             _obj = []
@@ -501,7 +516,7 @@ class Sim(object):
 
         return all_band_obj, positions
 
-    def _stack_ps_psfs(self, *, x, y, n_bands, **kwargs):
+    def _stack_ps_psfs(self, *, x, y, **kwargs):
         if not hasattr(self, '_psfs'):
             self._psfs = [[
                     PowerSpectrumPSF(
@@ -511,7 +526,7 @@ class Sim(object):
                         scale=self.scale,
                         **kwargs)
                     for _ in range(self.n_coadd_psf)]
-                for _ in range(n_bands)]
+                for _ in range(self.n_bands)]
 
             LOGGER.debug('stacking %d power spectrum psfs', self.n_coadd_psf)
 
@@ -519,7 +534,7 @@ class Sim(object):
 
         psfs = []
         psf_ims = []
-        for i in range(n_bands):
+        for i in range(self.n_bands):
             psf = galsim.Sum([
                 p.getPSF(galsim.PositionD(x=x, y=y))
                 for p in self._psfs[i]]).withFlux(1)
@@ -545,7 +560,7 @@ class Sim(object):
 
         return psfs, psf_ims
 
-    def _render_psf_image(self, *, x, y, n_bands):
+    def _render_psf_image(self, *, x, y):
         """Render the PSF image.
 
         Returns
@@ -570,12 +585,12 @@ class Sim(object):
             psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
             psf_im /= np.sum(psf_im)
             method = 'auto'
-            psf_ims = [psf_im] * n_bands
-            psfs = [psf] * n_bands
+            psf_ims = [psf_im] * self.n_bands
+            psfs = [psf] * self.n_bands
         elif self.psf_type == 'ps':
             kws = self.psf_kws or {}
             psfs, psf_ims = self._stack_ps_psfs(
-                x=x, y=y, n_bands=n_bands, **kws)
+                x=x, y=y, **kws)
             method = 'auto'
         elif self.psf_type == 'wldeblend':
             psfs, psf_ims = self._get_wldeblend_psfs(x=x, y=y)
@@ -590,7 +605,7 @@ class Sim(object):
 
         return psf_ims, _psf_wcs, target_noises, psfs, method
 
-    def get_psf_obs(self, *, x, y, n_bands, band):
+    def get_psf_obs(self, *, x, y, band):
         """Get an ngmix Observation of the PSF at a position.
 
         Parameters
@@ -599,8 +614,6 @@ class Sim(object):
             The column of the PSF.
         y : float
             The row of the PSF.
-        n_bands : int
-            The number of bands.
         band : int
             The index of the desired band.
 
@@ -610,7 +623,7 @@ class Sim(object):
             An Observation of the PSF.
         """
         psf_images, psf_wcs, noises, _, _ = self._render_psf_image(
-            x=x, y=y, n_bands=n_bands)
+            x=x, y=y)
 
         weight = np.zeros_like(psf_images[band]) + 1.0/noises[band]**2
 

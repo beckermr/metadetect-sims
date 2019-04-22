@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import pickle
 import tqdm
 import schwimmbad
 import multiprocessing
@@ -259,6 +260,8 @@ pres, mres = zip(*outputs)
 pres, mres = _cut(pres, mres)
 
 if rank == 0:
+    with open('data.pkl', 'wb') as fp:
+        pickle.dump(outputs, fp)
     m, msd, c, csd = _fit_m(pres, mres)
 
     print("""\
