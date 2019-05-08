@@ -49,6 +49,8 @@ class Sim(object):
         The noise for a single epoch image.
     ngal : float, optional
         The number of objects to simulate per arcminute.
+    n_bands : int, optional
+        The number of bands to simulate.
     gal_grid : int or None
         If not `None`, galaxies are laid out on a grid of `gal_grid` x
         `gal_grid` dimensions in the central part of the image.
@@ -114,6 +116,7 @@ class Sim(object):
             dim=225, buff=25,
             noise=180,
             ngal=45.0,
+            n_bands=1,
             gal_grid=None,
             psf_kws=None,
             gal_kws=None,
@@ -131,7 +134,7 @@ class Sim(object):
         self.buff = buff
         # assumed to be one band unless otherwise specified via the
         # galaxy type
-        self.noise = [noise / np.sqrt(self.n_coadd)]
+        self.noise = [noise / np.sqrt(self.n_coadd)] * n_bands
         self.ngal = ngal
         self.gal_grid = gal_grid
         self.im_cen = (dim - 1) / 2
@@ -420,12 +423,15 @@ class Sim(object):
         flux = 10**(0.4 * (30 - 18))
         half_light_radius = 0.5
 
-        obj = galsim.Sersic(
-            half_light_radius=half_light_radius,
-            n=1,
-        ).withFlux(flux)
+        _gal = []
+        for _ in range(self.n_bands):
+            obj = galsim.Sersic(
+                half_light_radius=half_light_radius,
+                n=1,
+            ).withFlux(flux)
+            _gal.append(obj)
 
-        return [obj]
+        return _gal
 
     def _get_gal_ground_galsim_parametric(self):
         if not hasattr(self, '_cosmo_cat'):
@@ -441,7 +447,7 @@ class Sim(object):
             (2.4**2 * (1.0 - 0.33**2)) *
             90
         )
-        return [gal]
+        return [gal for _ in range(self.n_bands)]
 
     def _get_gal_wldeblend(self):
         rind = self.rng.choice(self._wldeblend_cat.size)
