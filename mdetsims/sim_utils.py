@@ -178,6 +178,8 @@ class Sim(object):
 
         self.n_bands = len(self.noise)
 
+        LOGGER.info('simulating %d bands', self.n_bands)
+
     def _extra_init_for_wldeblend(self):
         # guard the import here
         import descwl
