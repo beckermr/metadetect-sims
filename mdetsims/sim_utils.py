@@ -524,6 +524,21 @@ class Sim(object):
 
         return all_band_obj, positions
 
+    def _get_psf_box_size(self, psfs, _psf_wcs):
+        if not hasattr(self, '_cached_psf_box_size'):
+            max_box_size = -1
+            for psf in psfs:
+                psf_im = psf.drawImage(wcs=_psf_wcs, setup_only=True).array
+                _box_size = np.max(psf_im.shape)
+                if _box_size % 2 == 0:
+                    _box_size += 1
+                if _box_size > max_box_size:
+                    max_box_size = _box_size
+            self._cached_psf_box_size = max_box_size
+            LOGGER.debug('psf box size set to %d', self._cached_psf_box_size)
+
+        return self._cached_psf_box_size
+
     def _stack_ps_psfs(self, *, x, y, **kwargs):
         if not hasattr(self, '_psfs'):
             self._psfs = [[
@@ -540,13 +555,22 @@ class Sim(object):
 
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
 
+        test_psfs = []
+        for i in range(self.n_bands):
+            test_psfs += [
+                p.getPSF(galsim.PositionD(x=x, y=y))
+                for p in self._psfs[i]]
+
+        psf_dim = self._get_psf_box_size(test_psfs, _psf_wcs)
+
         psfs = []
         psf_ims = []
         for i in range(self.n_bands):
             psf = galsim.Sum([
                 p.getPSF(galsim.PositionD(x=x, y=y))
                 for p in self._psfs[i]]).withFlux(1)
-            psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
+            psf_im = psf.drawImage(
+                nx=psf_dim, ny=psf_dim, wcs=_psf_wcs).array.copy()
             psf_im /= np.sum(psf_im)
 
             psfs.append(psf)
@@ -556,13 +580,16 @@ class Sim(object):
 
     def _get_wldeblend_psfs(self, *, x, y):
         _psf_wcs = self._get_local_jacobian(x=x, y=y)
+        psf_dim = self._get_psf_box_size(
+            [self._surveys[i].psf_model for i in range(len(self._surveys))],
+            _psf_wcs)
 
         psfs = []
         psf_ims = []
         for i in range(len(self._surveys)):
             psfs.append(self._surveys[i].psf_model)
             psf_im = psfs[-1].drawImage(
-                nx=21, ny=21, wcs=_psf_wcs).array.copy()
+                nx=psf_dim, ny=psf_dim, wcs=_psf_wcs).array.copy()
             psf_im /= np.sum(psf_im)
             psf_ims.append(psf_im)
 
@@ -590,7 +617,9 @@ class Sim(object):
             kws = self.psf_kws or {}
             fwhm = kws.get('fwhm', 0.9)
             psf = galsim.Gaussian(fwhm=fwhm)
-            psf_im = psf.drawImage(nx=21, ny=21, wcs=_psf_wcs).array.copy()
+            psf_dim = self._get_psf_box_size([psf], _psf_wcs)
+            psf_im = psf.drawImage(
+                nx=psf_dim, ny=psf_dim, wcs=_psf_wcs).array.copy()
             psf_im /= np.sum(psf_im)
             method = 'auto'
             psf_ims = [psf_im] * self.n_bands
