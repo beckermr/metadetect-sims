@@ -1,7 +1,7 @@
 CONFIG = {
     'gal_type': 'wldeblend',
     'psf_type': 'wldeblend',
-    'shear_scene': True,
+    'shear_scene': False,
     'n_coadd': 1,  # ignored for this sim
     'scale': 0.2,
     'dim': 300,
