@@ -37,6 +37,8 @@ class Sim(object):
     n_coadd_psf : int, optional
         The number of PSF images to coadd for models with variable PSFs. The
         default of None uses the same number of PSFs as `n_coadd`.
+    n_coadd_msk : int, optional
+        A number to scale the masking effects. The default is 1.
     g1 : float, optional
         The simulated shear for the 1-axis.
     g2 : float, optional
@@ -112,6 +114,7 @@ class Sim(object):
             shear_scene=True,
             n_coadd=1,
             n_coadd_psf=None,
+            n_coadd_msk=1,
             g1=0.02, g2=0.0,
             dim=225, buff=25,
             noise=180,
@@ -127,6 +130,7 @@ class Sim(object):
         self.gal_type = gal_type
         self.psf_type = psf_type
         self.n_coadd = n_coadd
+        self.n_coadd_msk = n_coadd_msk
         self.g1 = g1
         self.g2 = g2
         self.shear_scene = shear_scene
@@ -368,10 +372,10 @@ class Sim(object):
         # here we make the mask
         bad_mask = generate_bad_columns(
             image.shape, rng=self.noise_rng,
-            mean_bad_cols=self.n_coadd)
+            mean_bad_cols=self.n_coadd_msk)
         bad_mask |= generate_cosmic_rays(
             image.shape, rng=self.noise_rng,
-            mean_cosmic_rays=self.n_coadd)
+            mean_cosmic_rays=self.n_coadd_msk)
 
         # applies a 90 degree rotation to make it symmetric
         symmetrize_bad_mask(bad_mask)
