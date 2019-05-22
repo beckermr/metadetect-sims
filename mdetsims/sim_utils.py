@@ -326,6 +326,7 @@ class Sim(object):
             im += self.noise_rng.normal(scale=self.noise[band], size=im.shape)
             wt = im*0 + 1.0/self.noise[band]**2
             bmask = np.zeros(im.shape, dtype='i4')
+            ormask = np.zeros(im.shape, dtype='i4')
             noise = self.noise_rng.normal(size=im.shape) / np.sqrt(wt)
 
             if self.mask_and_interp:
@@ -350,6 +351,7 @@ class Sim(object):
                 im,
                 weight=wt,
                 bmask=bmask,
+                ormask=ormask,
                 jacobian=jac,
                 psf=psf_obs,
                 noise=noise)
@@ -364,8 +366,12 @@ class Sim(object):
         LOGGER.debug('applying masking and interpolation')
 
         # here we make the mask
-        bad_mask = generate_bad_columns(image.shape, rng=self.noise_rng)
-        bad_mask |= generate_cosmic_rays(image.shape, rng=self.noise_rng)
+        bad_mask = generate_bad_columns(
+            image.shape, rng=self.noise_rng,
+            mean_bad_cols=self.n_coadd)
+        bad_mask |= generate_cosmic_rays(
+            image.shape, rng=self.noise_rng,
+            mean_cosmic_rays=self.n_coadd)
 
         # applies a 90 degree rotation to make it symmetric
         symmetrize_bad_mask(bad_mask)
