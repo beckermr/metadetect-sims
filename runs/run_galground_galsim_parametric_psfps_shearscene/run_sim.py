@@ -1,16 +1,21 @@
 import sys
 import numpy as np
-import pickle
 import tqdm
 import schwimmbad
 import multiprocessing
 import logging
 import time
+import fitsio
 
 from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
 from mdetsims.metacal import MetacalPlusMOF, METACAL_TYPES
 from metadetect.metadetect import Metadetect
 from config import CONFIG
+
+try:
+    from config import SWAP12
+except ImportError:
+    SWAP12 = False
 
 n_sims = int(sys.argv[1])
 
@@ -144,6 +149,9 @@ def _get_stuff(rr):
     g2m = _a[:, 4]
     g2 = _a[:, 5]
 
+    if SWAP12:
+        g1p, g1m, g1, g2p, g2m, g2 = g2p, g2m, g2, g1p, g1m, g1
+
     return (
         g1, (g1p - g1m) / 2 / 0.01 * 0.02,
         g2, (g2p - g2m) / 2 / 0.01)
@@ -172,6 +180,19 @@ def _fit_m(prr, mrr):
         np.mean(y2) / np.mean(x2), np.std(cvals))
 
 
+def _add_shears(cfg, plus=True):
+    g1 = 0.02
+    g2 = 0.0
+
+    if not plus:
+        g1 *= -1
+
+    if SWAP12:
+        g1, g2 = g2, g1
+
+    cfg.update({'g1': g1, 'g2': g2})
+
+
 def _run_sim(seed):
     if DO_METACAL_MOF:
         try:
@@ -179,7 +200,8 @@ def _run_sim(seed):
             config.update(TEST_METACAL_MOF_CONFIG)
 
             rng = np.random.RandomState(seed=seed + 1000000)
-            sim = Sim(rng=rng, g1=0.02, **CONFIG)
+            _add_shears(CONFIG, plus=True)
+            sim = Sim(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
             md.go()
@@ -189,7 +211,8 @@ def _run_sim(seed):
             LOGGER.info('found %f objects per square arcminute', dens)
 
             rng = np.random.RandomState(seed=seed + 1000000)
-            sim = Sim(rng=rng, g1=-0.02, **CONFIG)
+            _add_shears(CONFIG, plus=False)
+            sim = Sim(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
             md.go()
@@ -208,7 +231,8 @@ def _run_sim(seed):
             config.update(TEST_METADETECT_CONFIG)
 
             rng = np.random.RandomState(seed=seed + 1000000)
-            sim = Sim(rng=rng, g1=0.02, **CONFIG)
+            _add_shears(CONFIG, plus=True)
+            sim = Sim(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()
@@ -218,7 +242,8 @@ def _run_sim(seed):
             LOGGER.info('found %f objects per square arcminute', dens)
 
             rng = np.random.RandomState(seed=seed + 1000000)
-            sim = Sim(rng=rng, g1=-0.02, **CONFIG)
+            _add_shears(CONFIG, plus=False)
+            sim = Sim(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()
@@ -244,6 +269,7 @@ if rank == 0:
     else:
         print('running metadetect', flush=True)
     print('config:', CONFIG, flush=True)
+    print('swap 12:', SWAP12)
     print('use mpi:', USE_MPI, flush=True)
     print("n_ranks:", n_ranks, flush=True)
     print("n_workers:", n_workers, flush=True)
@@ -260,8 +286,14 @@ pres, mres = zip(*outputs)
 pres, mres = _cut(pres, mres)
 
 if rank == 0:
-    with open('data.pkl', 'wb') as fp:
-        pickle.dump(outputs, fp)
+    dt = [('g1p', 'f8'), ('g1m', 'f8'), ('g1', 'f8'),
+          ('g2p', 'f8'), ('g2m', 'f8'), ('g2', 'f8')]
+    dplus = np.array(pres, dtype=dt)
+    dminus = np.array(mres, dtype=dt)
+    with fitsio.FITS('data.fits', 'rw') as fits:
+        fits.write(dplus, extname='plus')
+        fits.write(dminus, extname='minus')
+
     m, msd, c, csd = _fit_m(pres, mres)
 
     print("""\
