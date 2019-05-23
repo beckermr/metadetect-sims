@@ -256,7 +256,7 @@ def _run_sim(seed):
         except Exception as e:
             print(repr(e))
             retvals = (None, None)
-    if USE_MPI:
+    if USE_MPI and seed % 1000 == 0:
         print(
             "[% 10ds] %04d: %d" % (time.time() - START, rank, seed),
             flush=True)
