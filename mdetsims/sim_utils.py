@@ -78,6 +78,12 @@ class Sim(object):
     mask_and_interp : bool, optional
         Apply fake pixel masking for bad columns and cosmic rays and then
         interpolate them.
+    add_bad_columns : bool, optional
+        If False, do not add bad columns. Otherwise they will be added when
+        `mask_and_interp` is True.
+    add_cosmic_rays : bool, optional
+        If False, do not add cosmic rays. Otherwise they will be added when
+        `mask_and_interp` is True.
 
     Methods
     -------
@@ -124,7 +130,9 @@ class Sim(object):
             psf_kws=None,
             gal_kws=None,
             homogenize_psf=False,
-            mask_and_interp=False):
+            mask_and_interp=False,
+            add_bad_columns=True,
+            add_cosmic_rays=True):
         self.rng = rng
         self.noise_rng = np.random.RandomState(seed=rng.randint(1, 2**32-1))
         self.gal_type = gal_type
@@ -147,6 +155,8 @@ class Sim(object):
         self.n_coadd_psf = n_coadd_psf or self.n_coadd
         self.homogenize_psf = homogenize_psf
         self.mask_and_interp = mask_and_interp
+        self.add_bad_columns = add_bad_columns
+        self.add_cosmic_rays = add_cosmic_rays
 
         self.area_sqr_arcmin = ((self.dim - 2*self.buff) * scale / 60)**2
 
@@ -370,12 +380,15 @@ class Sim(object):
         LOGGER.debug('applying masking and interpolation')
 
         # here we make the mask
-        bad_mask = generate_bad_columns(
-            image.shape, rng=self.noise_rng,
-            mean_bad_cols=self.n_coadd_msk)
-        bad_mask |= generate_cosmic_rays(
-            image.shape, rng=self.noise_rng,
-            mean_cosmic_rays=self.n_coadd_msk)
+        bad_mask = np.zeros(image.shape, dtype=np.bool)
+        if self.add_bad_columns:
+            bad_mask |= generate_bad_columns(
+                image.shape, rng=self.noise_rng,
+                mean_bad_cols=self.n_coadd_msk)
+        if self.add_cosmic_rays:
+            bad_mask |= generate_cosmic_rays(
+                image.shape, rng=self.noise_rng,
+                mean_cosmic_rays=self.n_coadd_msk)
 
         # applies a 90 degree rotation to make it symmetric
         symmetrize_bad_mask(bad_mask)
