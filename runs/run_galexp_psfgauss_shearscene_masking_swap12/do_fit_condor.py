@@ -1,75 +1,14 @@
 import glob
 import os
 import pickle
-import tqdm
-import numpy as np
 import joblib
 
+from mdetsims.run_utils import cut_nones, estimate_m_and_c
 
-def _cut(prr, mrr):
-    prr_keep = []
-    mrr_keep = []
-    for pr, mr in zip(prr, mrr):
-        if pr is None or mr is None:
-            continue
-        prr_keep.append(pr)
-        mrr_keep.append(mr)
-    return prr_keep, mrr_keep
-
-
-def _get_stuff(rr):
-    _a = np.vstack(rr)
-    g1p = _a[:, 0]
-    g1m = _a[:, 1]
-    g1 = _a[:, 2]
-    g2p = _a[:, 3]
-    g2m = _a[:, 4]
-    g2 = _a[:, 5]
-
-    return (
-        g1, (g1p - g1m) / 2 / 0.01 * 0.02,
-        g2, (g2p - g2m) / 2 / 0.01)
-
-
-def _fit_m(prr, mrr):
-    g1p, R11p, g2p, R22p = _get_stuff(prr)
-    g1m, R11m, g2m, R22m = _get_stuff(mrr)
-
-    msk = (
-        np.isfinite(g1p) &
-        np.isfinite(R11p) &
-        np.isfinite(g1m) &
-        np.isfinite(R11m) &
-        np.isfinite(g2p) &
-        np.isfinite(R22p) &
-        np.isfinite(g2m) &
-        np.isfinite(R22m))
-    g1p = g1p[msk]
-    R11p = R11p[msk]
-    g1m = g1m[msk]
-    R11m = R11m[msk]
-    g2p = g2p[msk]
-    R22p = R22p[msk]
-    g2m = g2m[msk]
-    R22m = R22m[msk]
-
-    x1 = (R11p + R11m)/2
-    y1 = (g1p - g1m) / 2
-
-    x2 = (R22p + R22m) / 2
-    y2 = (g2p + g2m) / 2
-
-    rng = np.random.RandomState(seed=100)
-    mvals = []
-    cvals = []
-    for _ in tqdm.trange(500, leave=False):
-        ind = rng.choice(len(y1), replace=True, size=len(y1))
-        mvals.append(np.mean(y1[ind]) / np.mean(x1[ind]) - 1)
-        cvals.append(np.mean(y2[ind]) / np.mean(x2[ind]))
-
-    return (
-        np.mean(y1) / np.mean(x1) - 1, np.std(mvals),
-        np.mean(y2) / np.mean(x2), np.std(cvals))
+try:
+    from config import SWAP12
+except ImportError:
+    SWAP12 = False
 
 
 def _func(fname):
@@ -106,8 +45,8 @@ for i, s2n in enumerate([10, 15, 20]):
         _outputs.extend(o[i])
     pres, mres = zip(*_outputs)
 
-    pres, mres = _cut(pres, mres)
-    m, msd, c, csd = _fit_m(pres, mres)
+    pres, mres = cut_nones(pres, mres)
+    m, msd, c, csd = estimate_m_and_c(pres, mres, 0.02, swap12=SWAP12)
 
     print('s2n:', s2n)
     print("""\

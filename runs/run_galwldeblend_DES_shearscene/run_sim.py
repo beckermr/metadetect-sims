@@ -1,6 +1,5 @@
 import sys
 import numpy as np
-import tqdm
 import schwimmbad
 import multiprocessing
 import logging
@@ -9,6 +8,7 @@ import fitsio
 
 from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
 from mdetsims.metacal import MetacalPlusMOF, METACAL_TYPES
+from mdetsims.run_utils import estimate_m_and_c, cut_nones
 from metadetect.metadetect import Metadetect
 from config import CONFIG
 
@@ -16,6 +16,11 @@ try:
     from config import SWAP12
 except ImportError:
     SWAP12 = False
+
+try:
+    from config import CUT_INTERP
+except ImportError:
+    CUT_INTERP = False
 
 n_sims = int(sys.argv[1])
 
@@ -82,102 +87,55 @@ if DO_METACAL_MOF:
             np.mean(g1p), np.mean(g1m), np.mean(g1),
             np.mean(g2p), np.mean(g2m), np.mean(g2))
 else:
+
+    def _mask(data):
+        if CUT_INTERP:
+            return (
+                (data['flags'] == 0) &
+                (data['ormask'] == 0) &
+                (data['wmom_s2n'] > 10) &
+                (data['wmom_T_ratio'] > 1.2))
+        else:
+            return (
+                (data['flags'] == 0) &
+                (data['wmom_s2n'] > 10) &
+                (data['wmom_T_ratio'] > 1.2))
+
     def _meas_shear(res):
         op = res['1p']
-        q = ((op['flags'] == 0) &
-             (op['wmom_s2n'] > 10) &
-             (op['wmom_T_ratio'] > 1.2))
+        q = _mask(op)
         if not np.any(q):
             return None
         g1p = op['wmom_g'][q, 0]
 
         om = res['1m']
-        q = ((om['flags'] == 0) &
-             (om['wmom_s2n'] > 10) &
-             (om['wmom_T_ratio'] > 1.2))
+        q = _mask(om)
         if not np.any(q):
             return None
         g1m = om['wmom_g'][q, 0]
 
         o = res['noshear']
-        q = ((o['flags'] == 0) &
-             (o['wmom_s2n'] > 10) &
-             (o['wmom_T_ratio'] > 1.2))
+        q = _mask(o)
         if not np.any(q):
             return None
         g1 = o['wmom_g'][q, 0]
         g2 = o['wmom_g'][q, 1]
 
         op = res['2p']
-        q = ((op['flags'] == 0) &
-             (op['wmom_s2n'] > 10) &
-             (op['wmom_T_ratio'] > 1.2))
+        q = _mask(op)
         if not np.any(q):
             return None
         g2p = op['wmom_g'][q, 1]
 
-        op = res['2m']
-        q = ((op['flags'] == 0) &
-             (op['wmom_s2n'] > 10) &
-             (op['wmom_T_ratio'] > 1.2))
+        om = res['2m']
+        q = _mask(om)
         if not np.any(q):
             return None
-        g2m = op['wmom_g'][q, 1]
+        g2m = om['wmom_g'][q, 1]
 
         return (
             np.mean(g1p), np.mean(g1m), np.mean(g1),
             np.mean(g2p), np.mean(g2m), np.mean(g2))
-
-
-def _cut(prr, mrr):
-    prr_keep = []
-    mrr_keep = []
-    for pr, mr in zip(prr, mrr):
-        if pr is None or mr is None:
-            continue
-        prr_keep.append(pr)
-        mrr_keep.append(mr)
-    return prr_keep, mrr_keep
-
-
-def _get_stuff(rr):
-    _a = np.vstack(rr)
-    g1p = _a[:, 0]
-    g1m = _a[:, 1]
-    g1 = _a[:, 2]
-    g2p = _a[:, 3]
-    g2m = _a[:, 4]
-    g2 = _a[:, 5]
-
-    if SWAP12:
-        g1p, g1m, g1, g2p, g2m, g2 = g2p, g2m, g2, g1p, g1m, g1
-
-    return (
-        g1, (g1p - g1m) / 2 / 0.01 * 0.02,
-        g2, (g2p - g2m) / 2 / 0.01)
-
-
-def _fit_m(prr, mrr):
-    g1p, R11p, g2p, R22p = _get_stuff(prr)
-    g1m, R11m, g2m, R22m = _get_stuff(mrr)
-
-    x1 = (R11p + R11m)/2
-    y1 = (g1p - g1m) / 2
-
-    x2 = (R22p + R22m) / 2
-    y2 = (g2p + g2m) / 2
-
-    rng = np.random.RandomState(seed=100)
-    mvals = []
-    cvals = []
-    for _ in tqdm.trange(500, leave=False):
-        ind = rng.choice(len(y1), replace=True, size=len(y1))
-        mvals.append(np.mean(y1[ind]) / np.mean(x1[ind]) - 1)
-        cvals.append(np.mean(y2[ind]) / np.mean(x2[ind]))
-
-    return (
-        np.mean(y1) / np.mean(x1) - 1, np.std(mvals),
-        np.mean(y2) / np.mean(x2), np.std(cvals))
 
 
 def _add_shears(cfg, plus=True):
@@ -283,7 +241,7 @@ outputs = pool.map(_run_sim, range(n_sims))
 pool.close()
 
 pres, mres = zip(*outputs)
-pres, mres = _cut(pres, mres)
+pres, mres = cut_nones(pres, mres)
 
 if rank == 0:
     dt = [('g1p', 'f8'), ('g1m', 'f8'), ('g1', 'f8'),
@@ -294,7 +252,7 @@ if rank == 0:
         fits.write(dplus, extname='plus')
         fits.write(dminus, extname='minus')
 
-    m, msd, c, csd = _fit_m(pres, mres)
+    m, msd, c, csd = estimate_m_and_c(pres, mres, 0.02, swap12=SWAP12)
 
     print("""\
 # of sims: {n_sims}

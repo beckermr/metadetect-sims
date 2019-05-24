@@ -344,7 +344,6 @@ class Sim(object):
             im += self.noise_rng.normal(scale=self.noise[band], size=im.shape)
             wt = im*0 + 1.0/self.noise[band]**2
             bmask = np.zeros(im.shape, dtype='i4')
-            ormask = np.zeros(im.shape, dtype='i4')
             noise = self.noise_rng.normal(size=im.shape) / np.sqrt(wt)
 
             if self.mask_and_interp:
@@ -369,7 +368,7 @@ class Sim(object):
                 im,
                 weight=wt,
                 bmask=bmask,
-                ormask=ormask,
+                ormask=bmask.copy(),
                 jacobian=jac,
                 psf=psf_obs,
                 noise=noise)

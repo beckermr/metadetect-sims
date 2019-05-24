@@ -73,6 +73,13 @@ TEST_METADETECT_CONFIG = {
 
     # check for an edge hit
     'bmask_flags': 2**30,
+
+    # flags for mask fractions
+    'star_flags': 0,
+    'tapebump_flags': 0,
+    'spline_interp_flags': 0,
+    'noise_interp_flags': 0,
+    'imperfect_flags': 0
 }
 
 TEST_METACAL_MOF_CONFIG = {
