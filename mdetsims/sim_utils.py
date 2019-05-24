@@ -84,6 +84,8 @@ class Sim(object):
     add_cosmic_rays : bool, optional
         If False, do not add cosmic rays. Otherwise they will be added when
         `mask_and_interp` is True.
+    bad_columns_kws : dict, optional
+        A set of keyword arguments to pass to the bad column generator.
 
     Methods
     -------
@@ -132,7 +134,8 @@ class Sim(object):
             homogenize_psf=False,
             mask_and_interp=False,
             add_bad_columns=True,
-            add_cosmic_rays=True):
+            add_cosmic_rays=True,
+            bad_columns_kws=None):
         self.rng = rng
         self.noise_rng = np.random.RandomState(seed=rng.randint(1, 2**32-1))
         self.gal_type = gal_type
@@ -157,6 +160,7 @@ class Sim(object):
         self.mask_and_interp = mask_and_interp
         self.add_bad_columns = add_bad_columns
         self.add_cosmic_rays = add_cosmic_rays
+        self.bad_columns_kws = bad_columns_kws or {}
 
         self.area_sqr_arcmin = ((self.dim - 2*self.buff) * scale / 60)**2
 
@@ -384,7 +388,8 @@ class Sim(object):
         if self.add_bad_columns:
             bad_mask |= generate_bad_columns(
                 image.shape, rng=self.noise_rng,
-                mean_bad_cols=self.n_coadd_msk)
+                mean_bad_cols=self.n_coadd_msk,
+                **self.bad_columns_kws)
         if self.add_cosmic_rays:
             bad_mask |= generate_cosmic_rays(
                 image.shape, rng=self.noise_rng,
