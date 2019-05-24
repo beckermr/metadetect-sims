@@ -1,5 +1,6 @@
 import logging
 import os
+import functools
 
 import numpy as np
 
@@ -14,6 +15,11 @@ from .interp import interpolate_image_and_noise
 from .symmetrize import symmetrize_bad_mask
 
 LOGGER = logging.getLogger(__name__)
+
+
+@functools.lru_cache(maxsize=8)
+def _cached_catalog_read(fname):
+    return fitsio.read(fname)
 
 
 class Sim(object):
@@ -211,7 +217,7 @@ class Sim(object):
         else:
             fname = gal_kws['catalog']
 
-        self._wldeblend_cat = fitsio.read(fname)
+        self._wldeblend_cat = _cached_catalog_read(fname)
         self._wldeblend_cat['pa_disk'] = self.rng.uniform(
             low=0.0, high=360.0, size=self._wldeblend_cat.size)
         self._wldeblend_cat['pa_bulge'] = self._wldeblend_cat['pa_disk']
