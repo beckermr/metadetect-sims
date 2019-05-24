@@ -7,8 +7,11 @@ import time
 import fitsio
 
 from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
-from mdetsims.metacal import MetacalPlusMOF, METACAL_TYPES
-from mdetsims.run_utils import estimate_m_and_c, cut_nones
+from mdetsims.metacal import MetacalPlusMOF
+from mdetsims.run_utils import (
+    estimate_m_and_c, cut_nones,
+    measure_shear_metadetect,
+    measure_shear_metacal_plus_mof)
 from metadetect.metadetect import Metadetect
 from config import CONFIG
 
@@ -61,81 +64,13 @@ except Exception:
     DO_METACAL_MOF = False
 
 if DO_METACAL_MOF:
-    def _mask(mof, cat, s2n_cut=10, size_cut=0.5):
-        return (
-            (mof['flags'] == 0) &
-            (cat['mcal_s2n'] > s2n_cut) &
-            (cat['mcal_T_ratio'] > size_cut))
-
     def _meas_shear(res):
-        msks = {}
-        for sh in METACAL_TYPES:
-            msks[sh] = _mask(res['mof'], res[sh])
-            if not np.any(msks[sh]):
-                return None
-
-        g1p = res['1p']['mcal_g'][msks['1p'], 0]
-        g1m = res['1m']['mcal_g'][msks['1m'], 0]
-
-        g2p = res['2p']['mcal_g'][msks['2p'], 1]
-        g2m = res['2m']['mcal_g'][msks['2m'], 1]
-
-        g1 = res['noshear']['mcal_g'][msks['noshear'], 0]
-        g2 = res['noshear']['mcal_g'][msks['noshear'], 1]
-
-        return (
-            np.mean(g1p), np.mean(g1m), np.mean(g1),
-            np.mean(g2p), np.mean(g2m), np.mean(g2))
+        return measure_shear_metacal_plus_mof(
+            res, s2n_cut=10, t_ratio_cut=0.5)
 else:
-
-    def _mask(data):
-        if CUT_INTERP:
-            return (
-                (data['flags'] == 0) &
-                (data['ormask'] == 0) &
-                (data['wmom_s2n'] > 10) &
-                (data['wmom_T_ratio'] > 1.2))
-        else:
-            return (
-                (data['flags'] == 0) &
-                (data['wmom_s2n'] > 10) &
-                (data['wmom_T_ratio'] > 1.2))
-
     def _meas_shear(res):
-        op = res['1p']
-        q = _mask(op)
-        if not np.any(q):
-            return None
-        g1p = op['wmom_g'][q, 0]
-
-        om = res['1m']
-        q = _mask(om)
-        if not np.any(q):
-            return None
-        g1m = om['wmom_g'][q, 0]
-
-        o = res['noshear']
-        q = _mask(o)
-        if not np.any(q):
-            return None
-        g1 = o['wmom_g'][q, 0]
-        g2 = o['wmom_g'][q, 1]
-
-        op = res['2p']
-        q = _mask(op)
-        if not np.any(q):
-            return None
-        g2p = op['wmom_g'][q, 1]
-
-        om = res['2m']
-        q = _mask(om)
-        if not np.any(q):
-            return None
-        g2m = om['wmom_g'][q, 1]
-
-        return (
-            np.mean(g1p), np.mean(g1m), np.mean(g1),
-            np.mean(g2p), np.mean(g2m), np.mean(g2))
+        return measure_shear_metadetect(
+            res, s2n_cut=10, t_ratio_cut=1.2, cut_interp=CUT_INTERP)
 
 
 def _add_shears(cfg, plus=True):
@@ -159,6 +94,12 @@ def _run_sim(seed):
 
             rng = np.random.RandomState(seed=seed + 1000000)
             _add_shears(CONFIG, plus=True)
+            if SWAP12:
+                assert CONFIG['g1'] == 0.0
+                assert CONFIG['g2'] == 0.02
+            else:
+                assert CONFIG['g1'] == 0.02
+                assert CONFIG['g2'] == 0.0
             sim = Sim(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
@@ -170,6 +111,12 @@ def _run_sim(seed):
 
             rng = np.random.RandomState(seed=seed + 1000000)
             _add_shears(CONFIG, plus=False)
+            if SWAP12:
+                assert CONFIG['g1'] == 0.0
+                assert CONFIG['g2'] == -0.02
+            else:
+                assert CONFIG['g1'] == -0.02
+                assert CONFIG['g2'] == 0.0
             sim = Sim(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
@@ -190,6 +137,12 @@ def _run_sim(seed):
 
             rng = np.random.RandomState(seed=seed + 1000000)
             _add_shears(CONFIG, plus=True)
+            if SWAP12:
+                assert CONFIG['g1'] == 0.0
+                assert CONFIG['g2'] == 0.02
+            else:
+                assert CONFIG['g1'] == 0.02
+                assert CONFIG['g2'] == 0.0
             sim = Sim(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)
@@ -201,6 +154,12 @@ def _run_sim(seed):
 
             rng = np.random.RandomState(seed=seed + 1000000)
             _add_shears(CONFIG, plus=False)
+            if SWAP12:
+                assert CONFIG['g1'] == 0.0
+                assert CONFIG['g2'] == -0.02
+            else:
+                assert CONFIG['g1'] == -0.02
+                assert CONFIG['g2'] == 0.0
             sim = Sim(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)

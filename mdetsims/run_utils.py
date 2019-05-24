@@ -1,6 +1,8 @@
 import numpy as np
 import tqdm
 
+from .metacal import METACAL_TYPES
+
 
 def cut_nones(presults, mresults):
     """Cut entries that are None in a pair of lists. Any entry that is None
@@ -121,3 +123,138 @@ def estimate_m_and_c(presults, mresults, g_true, swap12=False, step=0.01):
     return (
         np.mean(y1) / np.mean(x1) - 1, np.std(mvals),
         np.mean(y2) / np.mean(x2), np.std(cvals))
+
+
+def measure_shear_metadetect(res, *, s2n_cut, t_ratio_cut, cut_interp):
+    """Measure the shear parameters for metadetect.
+
+    NOTE: Returns None if nothing can be measured.
+
+    Parameters
+    ----------
+    res : dict
+        The metadetect results.
+    s2n_cut : float
+        The cut on `wmom_s2n`. Typically 10.
+    t_ratio_cut : float
+        The cut on `t_ratio_cut`. Typically 1.2.
+    cut_interp : bool
+        If True, cut on the `ormask` flags.
+
+    Returns
+    -------
+    g1p : float
+        The mean 1-component shape for the plus metadetect measurement.
+    g1m : float
+        The mean 1-component shape for the minus metadetect measurement.
+    g1 : float
+        The mean 1-component shape for the zero-shear metadetect measurement.
+    g2p : float
+        The mean 2-component shape for the plus metadetect measurement.
+    g2m : float
+        The mean 2-component shape for the minus metadetect measurement.
+    g2 : float
+        The mean 2-component shape for the zero-shear metadetect measurement.
+    """
+    def _mask(data):
+        if cut_interp:
+            return (
+                (data['flags'] == 0) &
+                (data['ormask'] == 0) &
+                (data['wmom_s2n'] > s2n_cut) &
+                (data['wmom_T_ratio'] > t_ratio_cut))
+        else:
+            return (
+                (data['flags'] == 0) &
+                (data['wmom_s2n'] > s2n_cut) &
+                (data['wmom_T_ratio'] > t_ratio_cut))
+
+    op = res['1p']
+    q = _mask(op)
+    if not np.any(q):
+        return None
+    g1p = op['wmom_g'][q, 0]
+
+    om = res['1m']
+    q = _mask(om)
+    if not np.any(q):
+        return None
+    g1m = om['wmom_g'][q, 0]
+
+    o = res['noshear']
+    q = _mask(o)
+    if not np.any(q):
+        return None
+    g1 = o['wmom_g'][q, 0]
+    g2 = o['wmom_g'][q, 1]
+
+    op = res['2p']
+    q = _mask(op)
+    if not np.any(q):
+        return None
+    g2p = op['wmom_g'][q, 1]
+
+    om = res['2m']
+    q = _mask(om)
+    if not np.any(q):
+        return None
+    g2m = om['wmom_g'][q, 1]
+
+    return (
+        np.mean(g1p), np.mean(g1m), np.mean(g1),
+        np.mean(g2p), np.mean(g2m), np.mean(g2))
+
+
+def measure_shear_metacal_plus_mof(res, *, s2n_cut, t_ratio_cut):
+    """Measure the shear parameters for metacal+MOF.
+
+    NOTE: Returns None if nothing can be measured.
+
+    Parameters
+    ----------
+    res : dict
+        The metacal results.
+    s2n_cut : float
+        The cut on `wmom_s2n`. Typically 10.
+    t_ratio_cut : float
+        The cut on `t_ratio_cut`. Typically 0.5.
+
+    Returns
+    -------
+    g1p : float
+        The mean 1-component shape for the plus metacal measurement.
+    g1m : float
+        The mean 1-component shape for the minus metacal measurement.
+    g1 : float
+        The mean 1-component shape for the zero-shear metacal measurement.
+    g2p : float
+        The mean 2-component shape for the plus metacal measurement.
+    g2m : float
+        The mean 2-component shape for the minus metacal measurement.
+    g2 : float
+        The mean 2-component shape for the zero-shear metacal measurement.
+    """
+    def _mask(mof, cat, s2n_cut=10, size_cut=0.5):
+        return (
+            (mof['flags'] == 0) &
+            (cat['mcal_s2n'] > s2n_cut) &
+            (cat['mcal_T_ratio'] > t_ratio_cut))
+
+    msks = {}
+    for sh in METACAL_TYPES:
+        msks[sh] = _mask(res['mof'], res[sh])
+        if not np.any(msks[sh]):
+            return None
+
+    g1p = res['1p']['mcal_g'][msks['1p'], 0]
+    g1m = res['1m']['mcal_g'][msks['1m'], 0]
+
+    g2p = res['2p']['mcal_g'][msks['2p'], 1]
+    g2m = res['2m']['mcal_g'][msks['2m'], 1]
+
+    g1 = res['noshear']['mcal_g'][msks['noshear'], 0]
+    g2 = res['noshear']['mcal_g'][msks['noshear'], 1]
+
+    return (
+        np.mean(g1p), np.mean(g1m), np.mean(g1),
+        np.mean(g2p), np.mean(g2m), np.mean(g2))
