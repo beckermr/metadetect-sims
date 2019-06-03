@@ -79,7 +79,7 @@ TEST_METADETECT_CONFIG = {
     'tapebump_flags': 0,
     'spline_interp_flags': 0,
     'noise_interp_flags': 0,
-    'imperfect_flags': 0
+    'imperfect_flags': 0,
 }
 
 TEST_METACAL_MOF_CONFIG = {

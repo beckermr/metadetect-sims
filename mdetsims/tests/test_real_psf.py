@@ -72,7 +72,7 @@ def test_real_psf_interp(tmpdir):
     assert np.allclose(
         psf.getPSF(galsim.PositionD(x=0.5, y=1.9)).image.array,
         img,
-        atol=1e-3,
+        atol=2e-3,
         rtol=0)
 
 

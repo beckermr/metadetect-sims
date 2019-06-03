@@ -27,6 +27,12 @@ try:
 except ImportError:
     SWAP12 = False
 
+try:
+    from config import EXTRA_MDET_CONFIG
+    TEST_METADETECT_CONFIG.update(EXTRA_MDET_CONFIG)
+except ImportError:
+    pass
+
 if DO_METACAL_MOF:
     def _meas_shear(res, *, s2n_cut):
         return measure_shear_metacal_plus_mof(
