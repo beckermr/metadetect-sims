@@ -52,7 +52,8 @@ jobs:
               joblib \
               tqdm \
               scikit-learn \
-              esutil
+              esutil \
+              meds
             conda update --all -y -q
             pip install git+https://github.com/esheldon/metadetect.git \
               --force-reinstall --no-deps --no-cache-dir
