@@ -25,6 +25,12 @@ try:
 except ImportError:
     CUT_INTERP = False
 
+try:
+    from config import EXTRA_MDET_CONFIG
+    TEST_METADETECT_CONFIG.update(EXTRA_MDET_CONFIG)
+except ImportError:
+    pass
+
 n_sims = int(sys.argv[1])
 
 if n_sims == 1:

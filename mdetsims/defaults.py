@@ -80,9 +80,6 @@ TEST_METADETECT_CONFIG = {
     'spline_interp_flags': 0,
     'noise_interp_flags': 0,
     'imperfect_flags': 0,
-
-    # mask bigger regions around the center
-    'ormask_region': 4,  # 9x9 pixel region around object center
 }
 
 TEST_METACAL_MOF_CONFIG = {
