@@ -113,7 +113,7 @@ def test_lanczos_resample_one_interp_grid(a):
 
     for row in range(11):
         for col in range(25):
-            val1, val2, _ = lanczos_resample_one(
+            val1, _ = lanczos_resample_one(
                 im1,
                 np.array([row], dtype=np.float64),
                 np.array([col], dtype=np.float64),
@@ -145,7 +145,7 @@ def test_lanczos_resample_one_out_of_bounds(row, col):
     rng = np.random.RandomState(seed=10)
     im1 = rng.normal(size=(11, 25))
 
-    val1, val2, edge = lanczos_resample_one(
+    val1, edge = lanczos_resample_one(
         im1,
         np.array([row], dtype=np.float64),
         np.array([col], dtype=np.float64),
