@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit
 
 
-@njit
+@njit(nogil=True)
 def lanczos_resample_one(im1, rows, cols, a=3):
     """Lanczos resample one image at the input row and column positions.
 
@@ -83,7 +83,7 @@ def lanczos_resample_one(im1, rows, cols, a=3):
     return res1, edge
 
 
-@njit
+@njit(nogil=True)
 def lanczos_resample_two(im1, im2, rows, cols, a=3):
     """Lanczos resample two images at the input row and column positions.
 
@@ -170,7 +170,7 @@ def lanczos_resample_two(im1, im2, rows, cols, a=3):
     return res1, res2, edge
 
 
-@njit
+@njit(nogil=True)
 def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
     """Lanczos resample three images at the input row and column positions.
 
