@@ -374,22 +374,27 @@ class End2EndSim(object):
                 coadd_wgts=coadd_wgts, method=method)
 
             # make the final obs
-            jac = ngmix.jacobian.Jacobian(
+            obs_jac = ngmix.jacobian.Jacobian(
                 row=self.im_cen,
                 col=self.im_cen,
+                wcs=self.coadd_wcs.jacobian())
+
+            psf_jac = ngmix.jacobian.Jacobian(
+                row=self._psf_cen,
+                col=self._psf_cen,
                 wcs=self.coadd_wcs.jacobian())
 
             psf_obs = ngmix.Observation(
                 coadd_psf,
                 weight=0.0 * coadd_psf + 1.0 / self.noise[band]**2,
-                jacobian=jac)
+                jacobian=psf_jac)
 
             obs = ngmix.Observation(
                 coadd_im,
                 weight=0.0 * coadd_im + 1.0 / np.var(coadd_noise),
                 bmask=coadd_bmask,
                 ormask=coadd_bmask.copy(),
-                jacobian=jac,
+                jacobian=obs_jac,
                 psf=psf_obs,
                 noise=coadd_noise)
 
@@ -510,6 +515,7 @@ class End2EndSim(object):
 
     def _coadd_psfs(self, *, band, wcs_objs, coadd_wgts, method):
         psf_dim = 53
+        self._psf_cen = (psf_dim - 1)/2
         coadd_offset = int(self.im_cen - (psf_dim - 1) / 2)
         se_psf_dim = int(np.ceil(psf_dim * np.sqrt(2)))
         if se_psf_dim % 2 == 0:

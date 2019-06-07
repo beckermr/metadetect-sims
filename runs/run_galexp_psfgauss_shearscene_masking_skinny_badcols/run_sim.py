@@ -6,7 +6,8 @@ import logging
 import time
 import fitsio
 
-from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
+from mdetsims import (
+    End2EndSim, Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG)
 from mdetsims.metacal import MetacalPlusMOF
 from mdetsims.run_utils import (
     estimate_m_and_c, cut_nones,
@@ -30,6 +31,16 @@ try:
     TEST_METADETECT_CONFIG.update(EXTRA_MDET_CONFIG)
 except ImportError:
     pass
+
+try:
+    from config import DO_END2END_SIM
+except ImportError:
+    DO_END2END_SIM = False
+
+if DO_END2END_SIM:
+    SIM_CLASS = End2EndSim
+else:
+    SIM_CLASS = Sim
 
 n_sims = int(sys.argv[1])
 
@@ -106,7 +117,7 @@ def _run_sim(seed):
             else:
                 assert CONFIG['g1'] == 0.02
                 assert CONFIG['g2'] == 0.0
-            sim = Sim(rng=rng, **CONFIG)
+            sim = SIM_CLASS(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
             md.go()
@@ -123,7 +134,7 @@ def _run_sim(seed):
             else:
                 assert CONFIG['g1'] == -0.02
                 assert CONFIG['g2'] == 0.0
-            sim = Sim(rng=rng, **CONFIG)
+            sim = SIM_CLASS(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
             md.go()
@@ -149,7 +160,7 @@ def _run_sim(seed):
             else:
                 assert CONFIG['g1'] == 0.02
                 assert CONFIG['g2'] == 0.0
-            sim = Sim(rng=rng, **CONFIG)
+            sim = SIM_CLASS(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()
@@ -166,7 +177,7 @@ def _run_sim(seed):
             else:
                 assert CONFIG['g1'] == -0.02
                 assert CONFIG['g2'] == 0.0
-            sim = Sim(rng=rng, **CONFIG)
+            sim = SIM_CLASS(rng=rng, **CONFIG)
             mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()

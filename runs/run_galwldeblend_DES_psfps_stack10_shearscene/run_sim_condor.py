@@ -5,7 +5,8 @@ import joblib
 
 import numpy as np
 
-from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
+from mdetsims import (
+    End2EndSim, Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG)
 from mdetsims.metacal import MetacalPlusMOF
 from mdetsims.run_utils import (
     measure_shear_metadetect, measure_shear_metacal_plus_mof)
@@ -32,6 +33,16 @@ try:
     TEST_METADETECT_CONFIG.update(EXTRA_MDET_CONFIG)
 except ImportError:
     pass
+
+try:
+    from config import DO_END2END_SIM
+except ImportError:
+    DO_END2END_SIM = False
+
+if DO_END2END_SIM:
+    SIM_CLASS = End2EndSim
+else:
+    SIM_CLASS = Sim
 
 if DO_METACAL_MOF:
     def _meas_shear(res, *, s2n_cut):
@@ -72,7 +83,7 @@ def _run_sim(seed):
             else:
                 assert CONFIG['g1'] == 0.02
                 assert CONFIG['g2'] == 0.0
-            mbobs = Sim(rng=rng, **CONFIG).get_mbobs()
+            mbobs = SIM_CLASS(rng=rng, **CONFIG).get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
             md.go()
             pres = md.result
@@ -85,7 +96,7 @@ def _run_sim(seed):
             else:
                 assert CONFIG['g1'] == -0.02
                 assert CONFIG['g2'] == 0.0
-            mbobs = Sim(rng=rng, **CONFIG).get_mbobs()
+            mbobs = SIM_CLASS(rng=rng, **CONFIG).get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
             md.go()
             mres = md.result
@@ -102,7 +113,7 @@ def _run_sim(seed):
             else:
                 assert CONFIG['g1'] == 0.02
                 assert CONFIG['g2'] == 0.0
-            mbobs = Sim(rng=rng, **CONFIG).get_mbobs()
+            mbobs = SIM_CLASS(rng=rng, **CONFIG).get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()
             pres = md.result
@@ -115,7 +126,7 @@ def _run_sim(seed):
             else:
                 assert CONFIG['g1'] == -0.02
                 assert CONFIG['g2'] == 0.0
-            mbobs = Sim(rng=rng, **CONFIG).get_mbobs()
+            mbobs = SIM_CLASS(rng=rng, **CONFIG).get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()
             mres = md.result
