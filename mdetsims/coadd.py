@@ -65,16 +65,8 @@ def coadd_image_noise_interpfrac(
             se_images, se_noises, se_interp_fracs, se_wcs_objs, wgts):
 
         se_x, se_y = invert_affine_transform_wcs(u, v, se_wcs)
-        if False:
-            im, nse, intp, _ = lanczos_resample_three(
-                se_im, se_nse, se_intp, se_y, se_x, a=3)
-        else:
-            im, _ = lanczos_resample_one(
-                se_im, se_y, se_x, a=3)
-            nse, _ = lanczos_resample_one(
-                se_nse, se_y, se_x, a=3)
-            intp, _ = lanczos_resample_one(
-                se_intp, se_y, se_x, a=3)
+        im, nse, intp, _ = lanczos_resample_three(
+            se_im, se_nse, se_intp, se_y, se_x, a=3)
 
         coadd_image += (im.reshape((coadd_dim, coadd_dim)) * wgt)
         coadd_noise += (nse.reshape((coadd_dim, coadd_dim)) * wgt)
