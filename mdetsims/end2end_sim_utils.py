@@ -339,7 +339,7 @@ class End2EndSim(object):
         all_band_obj, uv_positions = self._get_band_objects()
 
         method = 'auto'
-        logging.debug("using draw method '%s'", method)
+        LOGGER.debug("using draw method '%s'", method)
 
         mbobs = ngmix.MultiBandObsList()
 
