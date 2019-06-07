@@ -473,6 +473,7 @@ class End2EndSim(object):
         coadd_wgts = np.array(coadd_wgts)
 
         # coadd them
+        print(se_images[0].dtype, se_noises[0].dtype, se_interp_fracs[0].dtype)
         coadd_im, coadd_noise, coadd_intp = coadd_image_noise_interpfrac(
             se_images, se_noises, se_interp_fracs, wcs_objs,
             coadd_wgts, self.scale, self.dim)
