@@ -210,7 +210,7 @@ if rank == 0:
 
 if not USE_MPI:
     pool = schwimmbad.JoblibPool(
-        n_workers, backend='multiprocessing', verbose=100)
+        n_workers, backend='serial', verbose=100)
 else:
     pool = schwimmbad.choose_pool(mpi=USE_MPI, processes=n_workers)
 outputs = pool.map(_run_sim, range(n_sims))
