@@ -1,25 +1,45 @@
 import time
 
 import numpy as np
-from mdetsims.lanczos import lanczos_resample_three
 
 
-dim = 500
+if True:
+    from mdetsims._lanczos import lanczos_one
 
-rng = np.random.RandomState(seed=10)
-im1 = rng.normal(size=(dim, dim))
-im2 = rng.normal(size=(dim, dim))
-im3 = rng.normal(size=(dim, dim))
+    dim = 500
 
-row = rng.uniform(size=10000, low=0, high=dim-1)
-col = rng.uniform(size=10000, low=0, high=dim-1)
+    rng = np.random.RandomState(seed=10)
+    im1 = rng.normal(size=(dim, dim))
 
-val1, val2, val3, _ = lanczos_resample_three(im1, im2, im3, row, col, a=3)
+    row = rng.uniform(size=10000, low=0, high=dim-1)
+    col = rng.uniform(size=10000, low=0, high=dim-1)
 
-t0 = time.time()
-for _ in range(10):
-    val1, val2, val3, _ = lanczos_resample_three(im1, im2, im3, row, col, a=3)
+    val1, _ = lanczos_one(im1, row, col, 3)
 
-t0 = time.time() - t0
+    t0 = time.time()
+    for _ in range(10):
+        val1, _ = lanczos_one(im1, row, col, 3)
+    t0 = time.time() - t0
 
-print('time:', t0/10)
+    print('time:', t0/10)
+
+else:
+    from mdetsims.lanczos import lanczos_resample_one
+
+    dim = 500
+
+    rng = np.random.RandomState(seed=10)
+    im1 = rng.normal(size=(dim, dim))
+
+    row = rng.uniform(size=10000, low=0, high=dim-1)
+    col = rng.uniform(size=10000, low=0, high=dim-1)
+
+    val1, _ = lanczos_resample_one(im1, row, col, a=3)
+
+    t0 = time.time()
+    for _ in range(10):
+        val1, _ = lanczos_resample_one(
+            im1, row, col, a=3)
+    t0 = time.time() - t0
+
+    print('time:', t0/10)
