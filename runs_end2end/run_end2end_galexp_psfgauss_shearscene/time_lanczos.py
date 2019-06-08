@@ -17,11 +17,11 @@ if True:
     val1, _ = lanczos_one(im1, row, col, 3)
 
     t0 = time.time()
-    for _ in range(10):
+    for _ in range(100):
         val1, _ = lanczos_one(im1, row, col, 3)
     t0 = time.time() - t0
 
-    print('time:', t0/10)
+    print('time:', t0/100)
 
 else:
     from mdetsims.lanczos import lanczos_resample_one
@@ -37,9 +37,9 @@ else:
     val1, _ = lanczos_resample_one(im1, row, col, a=3)
 
     t0 = time.time()
-    for _ in range(10):
+    for _ in range(100):
         val1, _ = lanczos_resample_one(
             im1, row, col, a=3)
     t0 = time.time() - t0
 
-    print('time:', t0/10)
+    print('time:', t0/100)
