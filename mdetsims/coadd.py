@@ -1,3 +1,4 @@
+import time
 import numpy as np
 
 from .lanczos import lanczos_resample_three, lanczos_resample_one
@@ -50,6 +51,8 @@ def coadd_image_noise_interpfrac(
     -------
     """
 
+    tot = 0.0
+
     # coadd pixel coords
     y, x = np.mgrid[0:coadd_dim, 0:coadd_dim]
     u = x.ravel() * coadd_scale
@@ -65,12 +68,16 @@ def coadd_image_noise_interpfrac(
             se_images, se_noises, se_interp_fracs, se_wcs_objs, wgts):
 
         se_x, se_y = invert_affine_transform_wcs(u, v, se_wcs)
+        t0 = time.time()
         im, nse, intp, _ = lanczos_resample_three(
             se_im, se_nse, se_intp, se_y, se_x, a=3)
+        tot += (time.time() - t0)
 
         coadd_image += (im.reshape((coadd_dim, coadd_dim)) * wgt)
         coadd_noise += (nse.reshape((coadd_dim, coadd_dim)) * wgt)
         coadd_intp += (intp.reshape((coadd_dim, coadd_dim)) * wgt)
+
+        print('time:', tot, flush=True)
 
     return coadd_image, coadd_noise, coadd_intp
 
