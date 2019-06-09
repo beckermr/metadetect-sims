@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit
 
 
-@njit(fastmath=True)
+@njit
 def lanczos_resample_one(im1, rows, cols, a=3):
     """Lanczos resample one image at the input row and column positions.
 
@@ -83,7 +83,7 @@ def lanczos_resample_one(im1, rows, cols, a=3):
     return res1, edge
 
 
-@njit(fastmath=True)
+@njit
 def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
     """Lanczos resample three images at the input row and column positions.
 
@@ -220,9 +220,12 @@ def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
 #         raise ValueError('rows, cols must be 1-d!')
 #
 #     values1, edge = lanczos_one(
-#         np.require(im1, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
-#         np.require(rows, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
-#         np.require(cols, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
+#         np.require(
+#             im1, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
+#         np.require(
+#             rows, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
+#         np.require(
+#             cols, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
 #         int(a))
 #
 #     return values1, edge.astype(np.bool)
@@ -272,11 +275,16 @@ def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
 #         raise ValueError('rows, cols must be 1-d!')
 #
 #     values1, values2, values3, edge = lanczos_three(
-#         np.require(im1, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
-#         np.require(im2, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
-#         np.require(im3, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
-#         np.require(rows, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
-#         np.require(cols, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
+#         np.require(
+#             im1, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
+#         np.require(
+#             im2, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
+#         np.require(
+#             im3, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
+#         np.require(
+#             rows, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
+#         np.require(
+#             cols, dtype=np.float64, requirements=['C', 'A', 'O', 'E']),
 #         int(a))
 #
 #     return values1, values2, values3, edge.astype(np.bool)
