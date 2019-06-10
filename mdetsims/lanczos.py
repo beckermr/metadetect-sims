@@ -4,6 +4,11 @@ from numba import njit
 
 @njit
 def sinc_pade(x):
+    """A Pade approximation to sinc that is good to roughly float precision."""
+
+    if x != 0 and x == int(x):
+        return 0
+
     x2 = x * x
     x4 = x2 * x2
     x6 = x4 * x2
@@ -90,7 +95,7 @@ def lanczos_resample_one(im1, rows, cols, a=3):
                 continue
 
             dy = y - y_pix
-            sy = np.sinc(dy) * np.sinc(dy/a)
+            sy = sinc_pade(dy) * sinc_pade(dy/a)
 
             for x_pix in range(x_s, x_f+1):
                 if x_pix < 0 or x_pix > nx-1:
@@ -179,7 +184,7 @@ def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
                 continue
 
             dy = y - y_pix
-            sy = np.sinc(dy) * np.sinc(dy/a)
+            sy = sinc_pade(dy) * sinc_pade(dy/a)
 
             for x_pix in range(x_s, x_f+1):
                 if x_pix < 0 or x_pix > nx-1:
