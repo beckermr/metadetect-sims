@@ -4,36 +4,42 @@ from numba import njit
 
 @njit
 def sinc_pade(x):
-    """A Pade approximation to sinc that is good to roughly float precision."""
+    """A pseudo-Pade approximation to sinc.
 
-    if x != 0 and x == int(x):
-        return 0
-
-    x2 = x * x
-    x4 = x2 * x2
-    x6 = x4 * x2
-    x8 = x4 * x4
-    x10 = x4 * x6
-
-    num = (
-        1 +
-        -1.493 * x2 +
-        0.5733 * x4 +
-        -0.08559 * x6 +
-        0.005521 * x8 +
-        -0.000133 * x10)
-    den = (
-        1 +
-        0.1518 * x2 +
-        0.01132 * x4 +
-        0.0005245 * x6 +
-        1.577e-05 * x8 +
-        2.657e-07 * x10)
+    When used in lanczos interpolation, this approximation to the sinc
+    function has error in the kernel of at most ~1.03019e-05 and is exactly
+    zero at x = 1, 2, 3 and exactly 1 at x = 0.
+    """
+    x = np.abs(x)
+    num = (  # noqa
+        -0.166666666666666 + x * (
+        -0.289176685343373 + x * (
+        -0.109757669089546 + x * (
+        0.0350931080575596 + x * (
+        0.0229947584643336 + x * (
+        -0.00089363958201935 + x * (
+        -0.00162722192965722 + x * (
+        -3.00689146075626e-05 + x * (
+        5.13864469774294e-05 + x * (
+        1.23561563382214e-06 + x * (
+        -6.37392253619041e-07))))))))))) * (x-1) * (x-2) * (x-3)
+    den = (  # noqa
+        1 + x * (
+        -0.0982732212730775 + x * (
+        0.122536542608403 + x * (
+        -0.0111525324680647 + x * (
+        0.00724707512833019 + x * (
+        -0.000584774445653404 + x * (
+        0.000262528048296579 + x * (
+        -1.71596576734417e-05 + x * (
+        5.91945411660804e-06 + x * (
+        -2.44174818579491e-07 + x * (
+        6.74473938075399e-08)))))))))))
     return num / den
 
 
 @njit
-def lanczos_resample_one(im1, rows, cols, a=3):
+def lanczos_resample_one(im1, rows, cols):
     """Lanczos resample one image at the input row and column positions.
 
     Points whose interpolation kernel would be truncated because it extends
@@ -50,9 +56,6 @@ def lanczos_resample_one(im1, rows, cols, a=3):
     cols : np.ndarray
         A one-dimensional array of input column/x values. These denote the
         location to sample on the second, fastest moving axis of the image.
-    a : int, optional
-        The size of the Lanczos kernel. The default of 3 is a good choice
-        for many applications.
 
     Returns
     -------
@@ -61,7 +64,7 @@ def lanczos_resample_one(im1, rows, cols, a=3):
         interpolation kernal was truncated because it extended beyond
         the input image have edge=True
     """
-
+    a = 3
     ny, nx = im1.shape
     outsize = rows.shape[0]
 
@@ -114,7 +117,7 @@ def lanczos_resample_one(im1, rows, cols, a=3):
 
 
 @njit
-def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
+def lanczos_resample_three(im1, im2, im3, rows, cols):
     """Lanczos resample three images at the input row and column positions.
 
     Points whose interpolation kernel would be truncated because it extends
@@ -135,9 +138,6 @@ def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
     cols : np.ndarray
         A one-dimensional array of input column/x values. These denote the
         location to sample on the second, fastest moving axis of the image.
-    a : int, optional
-        The size of the Lanczos kernel. The default of 3 is a good choice
-        for many applications.
 
     Returns
     -------
@@ -146,7 +146,7 @@ def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
         interpolation kernal was truncated because it extended beyond
         the input image have edge=True
     """
-
+    a = 3
     ny, nx = im1.shape
     outsize = rows.shape[0]
 

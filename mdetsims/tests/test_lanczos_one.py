@@ -4,74 +4,6 @@ import pytest
 from ..lanczos import lanczos_resample_one, sinc_pade
 
 
-def test_lanczos1_resample_one_smoke():
-    rng = np.random.RandomState(seed=10)
-    im1 = rng.normal(size=(11, 25))
-
-    row = 5.5
-    col = 7.5
-    val1, _ = lanczos_resample_one(
-        im1,
-        np.array([row], dtype=np.float64),
-        np.array([col], dtype=np.float64),
-        a=1)
-
-    # compute val by hand to compare
-    def _check(val, im):
-        row_s = 5  # int(np.floor(row)) - a + 1
-        row_e = 6  # int(np.floor(row)) + a
-        col_s = 7  # int(np.floor(col)) - a + 1
-        col_e = 8  # int(np.floor(col)) + a
-        true_val = 0.0
-        for r in range(row_s, row_e+1):
-            dr = row - r
-            for c in range(col_s, col_e+1):
-                dc = col - c
-
-                true_val += (
-                    im[r, c] *
-                    sinc_pade(dr) * sinc_pade(dr/1) *
-                    sinc_pade(dc) * sinc_pade(dc/1))
-
-        assert np.allclose(val, true_val)
-
-    _check(val1, im1)
-
-
-def test_lanczos2_resample_one_smoke():
-    rng = np.random.RandomState(seed=10)
-    im1 = rng.normal(size=(11, 25))
-
-    row = 5.5
-    col = 7.5
-    val1, _ = lanczos_resample_one(
-        im1,
-        np.array([row], dtype=np.float64),
-        np.array([col], dtype=np.float64),
-        a=2)
-
-    # compute val by hand to compare
-    def _check(val, im):
-        row_s = 4  # int(np.floor(row)) - a + 1
-        row_e = 7  # int(np.floor(row)) + a
-        col_s = 6  # int(np.floor(col)) - a + 1
-        col_e = 9  # int(np.floor(col)) + a
-        true_val = 0.0
-        for r in range(row_s, row_e+1):
-            dr = row - r
-            for c in range(col_s, col_e+1):
-                dc = col - c
-
-                true_val += (
-                    im[r, c] *
-                    sinc_pade(dr) * sinc_pade(dr/2) *
-                    sinc_pade(dc) * sinc_pade(dc/2))
-
-        assert np.allclose(val, true_val)
-
-    _check(val1, im1)
-
-
 def test_lanczos3_resample_one_smoke():
     rng = np.random.RandomState(seed=10)
     im1 = rng.normal(size=(11, 25))
@@ -81,8 +13,7 @@ def test_lanczos3_resample_one_smoke():
     val1, _ = lanczos_resample_one(
         im1,
         np.array([row], dtype=np.float64),
-        np.array([col], dtype=np.float64),
-        a=3)
+        np.array([col], dtype=np.float64))
 
     # compute val by hand to compare
     def _check(val, im):
@@ -106,8 +37,7 @@ def test_lanczos3_resample_one_smoke():
     _check(val1, im1)
 
 
-@pytest.mark.parametrize('a', [1, 2, 3, 4, 5])
-def test_lanczos_resample_one_interp_grid(a):
+def test_lanczos_resample_one_interp_grid():
     rng = np.random.RandomState(seed=10)
     im1 = rng.normal(size=(11, 25))
 
@@ -116,8 +46,7 @@ def test_lanczos_resample_one_interp_grid(a):
             val1, _ = lanczos_resample_one(
                 im1,
                 np.array([row], dtype=np.float64),
-                np.array([col], dtype=np.float64),
-                a=a)
+                np.array([col], dtype=np.float64))
             assert np.allclose(val1, im1[row, col])
 
 
@@ -148,8 +77,7 @@ def test_lanczos_resample_one_out_of_bounds(row, col):
     val1, edge = lanczos_resample_one(
         im1,
         np.array([row], dtype=np.float64),
-        np.array([col], dtype=np.float64),
-        a=3)
+        np.array([col], dtype=np.float64))
     assert np.all(edge)
 
 
@@ -176,6 +104,5 @@ def test_lanczos_resample_one_in_bounds(row, col):
     val1, edge = lanczos_resample_one(
         im1,
         np.array([row], dtype=np.float64),
-        np.array([col], dtype=np.float64),
-        a=3)
+        np.array([col], dtype=np.float64))
     assert np.all(~edge)

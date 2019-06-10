@@ -66,7 +66,7 @@ def coadd_image_noise_interpfrac(
 
         se_x, se_y = invert_affine_transform_wcs(u, v, se_wcs)
         im, nse, intp, _ = lanczos_resample_three(
-            se_im, se_nse, se_intp, se_y, se_x, a=3)
+            se_im, se_nse, se_intp, se_y, se_x)
 
         coadd_image += (im.reshape((coadd_dim, coadd_dim)) * wgt)
         coadd_noise += (nse.reshape((coadd_dim, coadd_dim)) * wgt)
@@ -102,8 +102,7 @@ def coadd_psfs(
         se_x, se_y = invert_affine_transform_wcs(u, v, se_wcs)
         se_x -= se_offset[0]
         se_y -= se_offset[1]
-        im, _ = lanczos_resample_one(
-            se_psf, se_y, se_x, a=3)
+        im, _ = lanczos_resample_one(se_psf, se_y, se_x)
         coadd_image += (im.reshape((coadd_dim, coadd_dim)) * wgt)
 
     return coadd_image
