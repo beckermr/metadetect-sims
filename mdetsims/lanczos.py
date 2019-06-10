@@ -3,6 +3,31 @@ from numba import njit
 
 
 @njit
+def sinc_pade(x):
+    x2 = x * x
+    x4 = x2 * x2
+    x6 = x4 * x2
+    x8 = x4 * x4
+    x10 = x4 * x6
+
+    num = (
+        1 +
+        -1.493 * x2 +
+        0.5733 * x4 +
+        -0.08559 * x6 +
+        0.005521 * x8 +
+        -0.000133 * x10)
+    den = (
+        1 +
+        0.1518 * x2 +
+        0.01132 * x4 +
+        0.0005245 * x6 +
+        1.577e-05 * x8 +
+        2.657e-07 * x10)
+    return num / den
+
+
+@njit
 def lanczos_resample_one(im1, rows, cols, a=3):
     """Lanczos resample one image at the input row and column positions.
 
@@ -72,7 +97,7 @@ def lanczos_resample_one(im1, rows, cols, a=3):
                     continue
 
                 dx = x - x_pix
-                sx = np.sinc(dx) * np.sinc(dx/a)
+                sx = sinc_pade(dx) * sinc_pade(dx/a)
 
                 kernel = sx*sy
 
@@ -161,7 +186,7 @@ def lanczos_resample_three(im1, im2, im3, rows, cols, a=3):
                     continue
 
                 dx = x - x_pix
-                sx = np.sinc(dx) * np.sinc(dx/a)
+                sx = sinc_pade(dx) * sinc_pade(dx/a)
 
                 kernel = sx*sy
 
