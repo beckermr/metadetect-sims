@@ -6,8 +6,10 @@ import logging
 import time
 import fitsio
 
-from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
-from mdetsims.metacal import MetacalPlusMOF
+from mdetsims import (
+    Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG,
+    TEST_METACAL_TRUEDETECT_CONFIG)
+from mdetsims.metacal import MetacalPlusMOF, MetacalTrueDetect
 from mdetsims.run_utils import (
     estimate_m_and_c, cut_nones,
     measure_shear_metadetect,
@@ -69,7 +71,12 @@ try:
 except Exception:
     DO_METACAL_MOF = False
 
-if DO_METACAL_MOF:
+try:
+    from config import DO_METACAL_TRUEDETECT
+except Exception:
+    DO_METACAL_TRUEDETECT = False
+
+if DO_METACAL_MOF or DO_METACAL_TRUEDETECT:
     def _meas_shear(res):
         return measure_shear_metacal_plus_mof(
             res, s2n_cut=10, t_ratio_cut=0.5)
@@ -136,6 +143,49 @@ def _run_sim(seed):
         except Exception as e:
             print(repr(e))
             retvals = (None, None)
+    elif DO_METACAL_TRUEDETECT:
+        try:
+            config = {}
+            config.update(TEST_METACAL_TRUEDETECT_CONFIG)
+
+            rng = np.random.RandomState(seed=seed + 1000000)
+            _add_shears(CONFIG, plus=True)
+            if SWAP12:
+                assert CONFIG['g1'] == 0.0
+                assert CONFIG['g2'] == 0.02
+            else:
+                assert CONFIG['g1'] == 0.02
+                assert CONFIG['g2'] == 0.0
+            sim = Sim(rng=rng, **CONFIG)
+            mbobs, tcat = sim.get_mbobs(return_truth_cat=True)
+            md = MetacalTrueDetect(config, mbobs, rng, tcat)
+            md.go()
+            pres = _meas_shear(md.result)
+
+            dens = len(md.result['noshear']) / sim.area_sqr_arcmin
+            LOGGER.info('found %f objects per square arcminute', dens)
+
+            rng = np.random.RandomState(seed=seed + 1000000)
+            _add_shears(CONFIG, plus=False)
+            if SWAP12:
+                assert CONFIG['g1'] == 0.0
+                assert CONFIG['g2'] == -0.02
+            else:
+                assert CONFIG['g1'] == -0.02
+                assert CONFIG['g2'] == 0.0
+            sim = Sim(rng=rng, **CONFIG)
+            mbobs, tcat = sim.get_mbobs(return_truth_cat=True)
+            md = MetacalTrueDetect(config, mbobs, rng, tcat)
+            md.go()
+            mres = _meas_shear(md.result)
+
+            dens = len(md.result['noshear']) / sim.area_sqr_arcmin
+            LOGGER.info('found %f objects per square arcminute', dens)
+
+            retvals = (pres, mres)
+        except Exception as e:
+            print(repr(e))
+            retvals = (None, None)
     else:
         try:
             config = {}
@@ -189,6 +239,8 @@ def _run_sim(seed):
 if rank == 0:
     if DO_METACAL_MOF:
         print('running metacal+MOF', flush=True)
+    elif DO_METACAL_TRUEDETECT:
+        print('running metacal+true detection', flush=True)
     else:
         print('running metadetect', flush=True)
     print('config:', CONFIG, flush=True)

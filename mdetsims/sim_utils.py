@@ -296,8 +296,13 @@ class Sim(object):
 
         LOGGER.info('catalog density: %f per sqr arcmin', self.ngal)
 
-    def get_mbobs(self):
+    def get_mbobs(self, return_truth_cat=False):
         """Make a simulated MultiBandObsList for metadetect.
+
+        Parameters
+        ----------
+        return_truth_cat : bool
+            If True, return the truth catalog.
 
         Returns
         -------
@@ -310,12 +315,17 @@ class Sim(object):
 
         mbobs = ngmix.MultiBandObsList()
 
+        truth_cat = np.zeros(len(positions), dtype=[('x', 'f8'), ('y', 'f8')])
+
         for band in range(self.n_bands):
 
             im = galsim.ImageD(nrow=self.dim, ncol=self.dim, xmin=0, ymin=0)
 
             band_objects = [o[band] for o in all_band_obj]
-            for obj, pos in zip(band_objects, positions):
+            for obj_ind, (obj, pos) in enumerate(zip(band_objects, positions)):
+                truth_cat['x'][obj_ind] = pos.x
+                truth_cat['y'][obj_ind] = pos.y
+
                 # draw with setup_only to get the image size
                 _im = obj.drawImage(
                     wcs=self.wcs,
@@ -383,7 +393,10 @@ class Sim(object):
             obslist.append(obs)
             mbobs.append(obslist)
 
-        return mbobs
+        if return_truth_cat:
+            return mbobs, truth_cat
+        else:
+            return mbobs
 
     def _mask_and_interp(self, image, noise):
         LOGGER.debug('applying masking and interpolation')
