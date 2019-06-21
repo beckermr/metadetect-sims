@@ -6,4 +6,6 @@ CONFIG = {
     'scale': 0.263,
 }
 
+N_PATCHES = 1_000_000
+
 DO_METACAL_TRUEDETECT = True

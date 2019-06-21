@@ -43,6 +43,50 @@ MEDS_CONFIG = {
     'box_padding': 2,
 }
 
+GAUSS_MAX_PARS = {
+    'ntry': 2,
+    'pars': {
+        'method': 'lm',
+        'lm_pars': {
+            'maxfev': 2000,
+            'xtol': 5.0e-5,
+            'ftol': 5.0e-5,
+        }
+    }
+}
+
+GAUSS_PRIORS = {
+    'cen': {
+        'type': 'normal2d',
+        'sigma': 0.263
+    },
+
+    'g': {
+        'type': 'ba',
+        'sigma': 0.2
+    },
+
+    'T': {
+        'type': 'two-sided-erf',
+        'pars': [-1.0, 0.1, 1.0e+06, 1.0e+05]
+    },
+
+    'flux': {
+        'type': 'two-sided-erf',
+        'pars': [-100.0, 1.0, 1.0e+09, 1.0e+08]
+    }
+}
+
+GAUSS_PSF = {
+    'model': 'gauss',
+    'ntry': 2,
+    'lm_pars': {
+        'maxfev': 2000,
+        'ftol': 1.0e-5,
+        'xtol': 1.0e-5
+    }
+}
+
 TEST_METADETECT_CONFIG = {
     'weight': {
         'fwhm': 1.2,  # arcsec
@@ -59,17 +103,7 @@ TEST_METADETECT_CONFIG = {
     'meds': MEDS_CONFIG,
 
     # needed for PSF symmetrization
-    'psf': {
-        'model': 'gauss',
-
-        'ntry': 2,
-
-        'lm_pars': {
-            'maxfev': 2000,
-            'ftol': 1.0e-5,
-            'xtol': 1.0e-5,
-        }
-    },
+    'psf': GAUSS_PSF,
 
     # check for an edge hit
     'bmask_flags': 2**30,
@@ -169,50 +203,10 @@ TEST_METACAL_MOF_CONFIG = {
         },
 
         'model': 'gauss',
+        'max_pars': GAUSS_MAX_PARS,
+        'priors': GAUSS_PRIORS,
 
-        'max_pars': {
-            'ntry': 2,
-            'pars': {
-                'method': 'lm',
-                'lm_pars': {
-                    'maxfev': 2000,
-                    'xtol': 5.0e-5,
-                    'ftol': 5.0e-5,
-                }
-            }
-        },
-
-        'priors': {
-            'cen': {
-                'type': 'normal2d',
-                'sigma': 0.263
-            },
-
-            'g': {
-                'type': 'ba',
-                'sigma': 0.2
-            },
-
-            'T': {
-                'type': 'two-sided-erf',
-                'pars': [-1.0, 0.1, 1.0e+06, 1.0e+05]
-            },
-
-            'flux': {
-                'type': 'two-sided-erf',
-                'pars': [-100.0, 1.0, 1.0e+09, 1.0e+08]
-            }
-        },
-
-        'psf': {
-            'model': 'gauss',
-            'ntry': 2,
-            'lm_pars': {
-                'maxfev': 2000,
-                'ftol': 1.0e-5,
-                'xtol': 1.0e-5
-            }
-        }
+        'psf': GAUSS_PSF
     }
 }
 
@@ -229,55 +223,73 @@ TEST_METACAL_TRUEDETECT_CONFIG = {
         },
 
         'model': 'wmom',
-
         'weight': {
             'fwhm': 1.2
         },
 
-        # 'model': 'gauss',
-        #
-        # 'max_pars': {
-        #     'ntry': 2,
-        #     'pars': {
-        #         'method': 'lm',
-        #         'lm_pars': {
-        #             'maxfev': 2000,
-        #             'xtol': 5.0e-5,
-        #             'ftol': 5.0e-5,
-        #         }
-        #     }
-        # },
-        #
-        # 'priors': {
-        #     'cen': {
-        #         'type': 'normal2d',
-        #         'sigma': 0.263
-        #     },
-        #
-        #     'g': {
-        #         'type': 'ba',
-        #         'sigma': 0.2
-        #     },
-        #
-        #     'T': {
-        #         'type': 'two-sided-erf',
-        #         'pars': [-1.0, 0.1, 1.0e+06, 1.0e+05]
-        #     },
-        #
-        #     'flux': {
-        #         'type': 'two-sided-erf',
-        #         'pars': [-100.0, 1.0, 1.0e+09, 1.0e+08]
-        #     }
-        # },
+        'psf': GAUSS_PSF,
+    }
+}
 
-        'psf': {
-            'model': 'gauss',
-            'ntry': 2,
-            'lm_pars': {
-                'maxfev': 2000,
-                'ftol': 1.0e-5,
-                'xtol': 1.0e-5
-            }
-        }
+TEST_METACAL_TRUEDETECT_GAUSS_CONFIG = {
+    'meds': MEDS_CONFIG,
+    'metacal': {
+        # check for an edge hit
+        'bmask_flags': 2**30,
+
+        'metacal_pars': {
+            'psf': 'fitgauss',
+            'types': ['noshear', '1p', '1m', '2p', '2m'],
+            'use_noise_image': True,
+        },
+
+        'model': 'gauss',
+        'max_pars': GAUSS_MAX_PARS,
+        'priors': GAUSS_PRIORS,
+
+        'psf': GAUSS_PSF,
+    }
+}
+
+TEST_METACAL_SEP_CONFIG = {
+    'sx': SX_CONFIG,
+    'meds': MEDS_CONFIG,
+    'metacal': {
+        # check for an edge hit
+        'bmask_flags': 2**30,
+
+        'metacal_pars': {
+            'psf': 'fitgauss',
+            'types': ['noshear', '1p', '1m', '2p', '2m'],
+            'use_noise_image': True,
+        },
+
+        'model': 'wmom',
+        'weight': {
+            'fwhm': 1.2
+        },
+
+        'psf': GAUSS_PSF,
+    }
+}
+
+TEST_METACAL_SEP_GAUSS_CONFIG = {
+    'sx': SX_CONFIG,
+    'meds': MEDS_CONFIG,
+    'metacal': {
+        # check for an edge hit
+        'bmask_flags': 2**30,
+
+        'metacal_pars': {
+            'psf': 'fitgauss',
+            'types': ['noshear', '1p', '1m', '2p', '2m'],
+            'use_noise_image': True,
+        },
+
+        'model': 'gauss',
+        'max_pars': GAUSS_MAX_PARS,
+        'priors': GAUSS_PRIORS,
+
+        'psf': GAUSS_PSF,
     }
 }

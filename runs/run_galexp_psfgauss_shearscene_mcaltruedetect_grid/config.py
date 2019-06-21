@@ -7,4 +7,6 @@ CONFIG = {
     'gal_grid': 7,
 }
 
+N_PATCHES = 1_000_000
+
 DO_METACAL_TRUEDETECT = True
