@@ -44,6 +44,9 @@ class MetacalFitter(FitterBase):
         self['metacal']['keep_all_fits'] = self['metacal'].get(
             'keep_all_fits', False)
 
+        if self['metacal']['keep_all_fits']:
+            logger.debug('keping all metacal fits!')
+
         # be safe friends!
         if 'types' in self['metacal']:
             assert self['metacal']['types'] == METACAL_TYPES

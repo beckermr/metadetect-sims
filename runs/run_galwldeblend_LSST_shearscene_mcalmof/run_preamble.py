@@ -62,6 +62,11 @@ def get_shear_meas_config():
     else:
         SHEAR_MEAS_CONFIG = TEST_METADETECT_CONFIG
 
+    try:
+        from config import SHEAR_MEAS_CONFIG
+    except ImportError:
+        pass
+
     return (
         SWAP12, CUT_INTERP, DO_METACAL_MOF, DO_METACAL_SEP,
         DO_METACAL_TRUEDETECT,
