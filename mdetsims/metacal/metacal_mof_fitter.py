@@ -62,7 +62,8 @@ class MetacalPlusMOF(object):
         self._fofs = fofs
 
         # now for each fof, assemble the observations and run the code
-        data = []
+        data = {mtype: [] for mtype in METACAL_TYPES}
+
         n_fofs = np.max(self._fofs['fofid'])
         for fofid in range(n_fofs):
             msk = self._fofs['fofid'] == fofid
@@ -90,59 +91,18 @@ class MetacalPlusMOF(object):
             res = mcal.result
 
             if res is not None:
-                data.append(res)
+                for key in res:
+                    if res[key] is not None:
+                        data[key].append(res[key])
 
-        if len(data) > 0:
-            # combine, sort by ind
-            res = eu.numpy_util.combine_arrlist(data)
-            srt = np.argsort(res['id'])
-            res = res[srt]
-            self._result = self._result_to_dict(res)
-        else:
-            self._result = None
+        for key in data:
+            if len(data[key]) > 0:
+                # combine, sort by ind
+                res = eu.numpy_util.combine_arrlist(data[key])
+                srt = np.argsort(res['id'])
+                res = res[srt]
+                data[key] = res
+            else:
+                data[key] = None
 
-    def _result_to_dict(self, data):
-        cols_to_always_keep = ['id', 'fofid', 'masked_frac', 'x', 'y']
-
-        def _get_col_type(col):
-            for dtup in data.descr.descr:
-                if dtup[0] == col:
-                    return list(dtup[1:])
-            return None
-
-        result = {}
-
-        # build the main catalog
-        main_dtype_descr = []
-        for dtup in data.dtype.descr:
-            if not dtup[0].startswith('mcal_'):
-                main_dtype_descr.append(dtup)
-        main = np.zeros(len(data), dtype=main_dtype_descr)
-        for col in main.dtype.names:
-            main[col] = data[col]
-        result['mof'] = main
-
-        # now build each of other catalogs
-        for sh in METACAL_TYPES:
-            dtype_descr = []
-            for dtup in data.dtype.descr:
-                if dtup[0] in cols_to_always_keep:
-                    dtype_descr.append(dtup)
-                elif dtup[0].startswith('mcal_') and dtup[0].endswith(sh):
-                    dlist = [dtup[0].replace('_%s' % sh, '')]
-                    dlist = dlist + list(dtup[1:])
-                    dtype_descr.append(tuple(dlist))
-
-            sh_cat = np.zeros(len(data), dtype=dtype_descr)
-            for col in sh_cat.dtype.names:
-                sh_col = col + '_%s' % sh
-                if col in data.dtype.names:
-                    sh_cat[col] = data[col]
-                    continue
-                elif sh_col in data.dtype.names:
-                    sh_cat[col] = data[sh_col]
-                else:
-                    raise ValueError("column %s not found!" % col)
-            result[sh] = sh_cat
-
-        return result
+        self._result = data

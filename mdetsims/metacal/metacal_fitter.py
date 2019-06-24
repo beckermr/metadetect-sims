@@ -2,12 +2,9 @@ import logging
 import numpy as np
 import esutil as eu
 
-from ngmix.bootstrap import MaxMetacalBootstrapper
-from ngmix.gexceptions import BootPSFFailure, BootGalFailure
-
 from .base_fitter import FitterBase, _fit_one_psf
 from .util import Namer
-from .metacal_wmom_fitter import MomentsMetacalBootstrapper
+from .bootstrappers import MomentsMetacalBootstrapper, MaxMetacalBootstrapper
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +41,8 @@ class MetacalFitter(FitterBase):
             assert self.metacal_prior is not None
         self['metacal']['symmetrize_weight'] = self['metacal'].get(
             'symmetrize_weight', False)
+        self['metacal']['keep_all_fits'] = self['metacal'].get(
+            'keep_all_fits', False)
 
         # be safe friends!
         if 'types' in self['metacal']:
@@ -56,7 +55,13 @@ class MetacalFitter(FitterBase):
             raise RuntimeError('run go() first')
 
         if self._result is not None:
-            return self._result.copy()
+            res = {}
+            for key in self._result:
+                if self._result[key] is not None:
+                    res[key] = self._result[key].copy()
+                else:
+                    res[key] = None
+            return res
         else:
             return None
 
@@ -119,40 +124,41 @@ class MetacalFitter(FitterBase):
 
         assert len(mbobs_list[0]) == self.nband
 
-        datalist = []
+        result = {key: [] for key in METACAL_TYPES}
         for i, mbobs in enumerate(mbobs_list):
             if self._check_flags(mbobs):
-                try:
-                    boot = self._do_one_metacal(mbobs)
-                    if isinstance(boot, dict):
-                        res = boot
-                    else:
-                        res = boot.get_metacal_result()
-                except (BootPSFFailure, BootGalFailure) as err:
-                    logger.debug(str(err))
-                    res = {'mcal_flags': 1}
-
-                if res['mcal_flags'] != 0:
-                    logger.debug("metacal fit failed")
+                boot = self._do_one_metacal(mbobs)
+                if isinstance(boot, dict):
+                    res = boot
                 else:
-                    # make sure we send an array
-                    fit_data = self._get_metacal_output(res, self.nband, mbobs)
+                    res = boot.get_metacal_result()
+
+                # record the things
+                if (res['mcal_flags'] != 0 and
+                        not self['metacal']['keep_all_fits']):
+                    logger.debug('a metacal fit failed - ignoring everything!')
+                else:
+                    arr_res = self._get_metacal_output(res, self.nband, mbobs)
+
                     if data is not None:
                         odata = data[i:i+1]
-                        fit_data = eu.numpy_util.add_fields(
-                            fit_data,
-                            odata.dtype.descr,
-                        )
-                        eu.numpy_util.copy_fields(odata, fit_data)
+                        for key in METACAL_TYPES:
+                            fit_data = eu.numpy_util.add_fields(
+                                arr_res[key],
+                                odata.dtype.descr)
+                            eu.numpy_util.copy_fields(odata, fit_data)
+                            arr_res[key] = fit_data
 
-                    self._print_result(fit_data)
-                    datalist.append(fit_data)
+                    for key in result:
+                        result[key].append(arr_res[key])
 
-        if len(datalist) == 0:
-            return None
+        for key in result:
+            if len(result[key]) > 0:
+                result[key] = eu.numpy_util.combine_arrlist(result[key])
+            else:
+                result[key] = None
 
-        output = eu.numpy_util.combine_arrlist(datalist)
-        return output
+        return result
 
     def _do_one_metacal(self, mbobs):
         conf = self['metacal']
@@ -220,34 +226,33 @@ class MetacalFitter(FitterBase):
             data['mcal_s2n_noshear'][0],
             data['mcal_T_ratio_noshear'][0])
 
-    def _get_metacal_dtype(self, npars, nband):
+    def _get_metacal_dtype(self, npars, nband, mtype):
         dt = [
             ('x', 'f8'),
             ('y', 'f8'),
         ]
-        for mtype in METACAL_TYPES:
-            n = Namer(front='mcal', back=mtype)
-            if mtype == 'noshear':
-                dt += [
-                    (n('psf_g'), 'f8', 2),
-                    (n('psf_T'), 'f8'),
-                ]
 
+        n = Namer(front='mcal')
+        if mtype == 'noshear':
             dt += [
-                (n('nfev'), 'i4'),
-                (n('s2n'), 'f8'),
-                (n('s2n_r'), 'f8'),
-                (n('pars'), 'f8', npars),
-                (n('pars_cov'), 'f8', (npars, npars)),
-                (n('g'), 'f8', 2),
-                (n('g_cov'), 'f8', (2, 2)),
-                (n('T'), 'f8'),
-                (n('T_err'), 'f8'),
-                (n('T_ratio'), 'f8'),
-                (n('flux'), 'f8', nband),
-                (n('flux_cov'), 'f8', (nband, nband)),
-                (n('flux_err'), 'f8', nband),
+                (n('psf_g'), 'f8', 2),
+                (n('psf_T'), 'f8'),
             ]
+        dt += [
+            (n('flags'), 'i4'),
+            (n('nfev'), 'i4'),
+            (n('s2n'), 'f8'),
+            (n('pars'), 'f8', npars),
+            (n('pars_cov'), 'f8', (npars, npars)),
+            (n('g'), 'f8', 2),
+            (n('g_cov'), 'f8', (2, 2)),
+            (n('T'), 'f8'),
+            (n('T_err'), 'f8'),
+            (n('T_ratio'), 'f8'),
+            (n('flux'), 'f8', nband),
+            (n('flux_cov'), 'f8', (nband, nband)),
+            (n('flux_err'), 'f8', nband),
+        ]
 
         return dt
 
@@ -260,17 +265,18 @@ class MetacalFitter(FitterBase):
         assert METACAL_TYPES[0] == 'noshear'
 
         npars = len(allres['noshear']['pars'])
-        dt = self._get_metacal_dtype(npars, nband)
-        data = np.zeros(1, dtype=dt)
-
-        data0 = data[0]
-        data0['y'] = mbobs[0][0].meta['orig_row']
-        data0['x'] = mbobs[0][0].meta['orig_col']
+        n = Namer(front='mcal')
+        arr_res = {}
 
         for mtype in METACAL_TYPES:
-            n = Namer(front='mcal', back=mtype)
-
             res = allres[mtype]
+
+            dt = self._get_metacal_dtype(npars, nband, mtype)
+            data = np.zeros(1, dtype=dt)
+
+            data0 = data[0]
+            data0['y'] = mbobs[0][0].meta['orig_row']
+            data0['x'] = mbobs[0][0].meta['orig_col']
 
             if mtype == 'noshear':
                 if 'gpsf' in res:
@@ -285,6 +291,9 @@ class MetacalFitter(FitterBase):
                 if nn in data.dtype.names:
                     data0[nn] = res[name]
 
+            # do this so it has the data for the if statment below
+            arr_res[mtype] = data
+
             if 'T_ratio' in res:
                 # correct the ratio of the moments to match mcal cuts
                 data0[n('T_ratio')] = res['T_ratio'] / (1.2/0.5)
@@ -292,9 +301,13 @@ class MetacalFitter(FitterBase):
             else:
                 # this relies on noshear coming first in the metacal
                 # types
-                data0[n('T_ratio')] = data0[n('T')]/data0['mcal_psf_T_noshear']
+                data0[n('T_ratio')] = (
+                    data0[n('T')]/arr_res['noshear']['mcal_psf_T'])
 
-        return data
+            # do it again because blah
+            arr_res[mtype] = data
+
+        return arr_res
 
     def _get_bootstrapper(self, mbobs):
         if self['metacal']['model'] == 'wmom':
