@@ -1,9 +1,12 @@
+import logging
 import numpy as np
 import esutil as eu
 
 from ngmix.medsreaders import MultiBandNGMixMEDS
 from metadetect.detect import MEDSInterface
 from .metacal_fitter import MetacalFitter, METACAL_TYPES
+
+logger = logging.getLogger(__name__)
 
 
 class TruthMEDSifier(object):
@@ -170,6 +173,12 @@ class MetacalTrueDetect(object):
         """The fitting results."""
         if not hasattr(self, '_result'):
             raise RuntimeError('run go() first')
+
+        for key in self._result:
+            msk = np.sum(
+                (self._result[key]['flags'] == 0) &
+                (self._result[key]['mcal_flags'] == 0))
+            logger.debug('%s: %d entries in catalog', key, msk)
 
         return self._result
 
