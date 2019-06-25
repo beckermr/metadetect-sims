@@ -1,9 +1,12 @@
+import logging
 import numpy as np
 import esutil as eu
 
 from ngmix.medsreaders import MultiBandNGMixMEDS
 from metadetect.detect import MEDSInterface
 from .metacal_fitter import MetacalFitter, METACAL_TYPES
+
+logger = logging.getLogger(__name__)
 
 
 class TruthMEDSifier(object):
@@ -171,6 +174,12 @@ class MetacalTrueDetect(object):
         if not hasattr(self, '_result'):
             raise RuntimeError('run go() first')
 
+        for key in self._result:
+            msk = np.sum(
+                (self._result[key]['flags'] == 0) &
+                (self._result[key]['mcal_flags'] == 0))
+            logger.debug('%s: %d entries in catalog', key, msk)
+
         return self._result
 
     def go(self):
@@ -183,7 +192,7 @@ class MetacalTrueDetect(object):
         self._mbmeds = self._medsifier.get_multiband_meds()
 
         # run metacal for each true object
-        data = []
+        data = {mtype: [] for mtype in METACAL_TYPES}
         for ind in range(self.cat.size):
             o = self._mbmeds.get_mbobs(ind)
             o.meta['id'] = ind
@@ -195,50 +204,25 @@ class MetacalTrueDetect(object):
             res = mcal.result
 
             if res is not None:
-                data.append(res)
+                for key in res:
+                    if res[key] is not None:
+                        res[key] = eu.numpy_util.add_fields(
+                            res[key],
+                            [('id', 'i4')])
+                        res[key]['id'] = ind
+                        data[key].append(res[key])
 
-        if len(data) > 0:
-            # combine
-            res = eu.numpy_util.combine_arrlist(data)
-            self._result = self._result_to_dict(res)
-        else:
-            self._result = None
+        for key in data:
+            if len(data[key]) > 0:
+                # combine, sort by ind
+                res = eu.numpy_util.combine_arrlist(data[key])
+                # mock this up
+                res = eu.numpy_util.add_fields(
+                    res,
+                    [('flags', 'i4')])
+                res['flags'] = 0
+                data[key] = res
+            else:
+                data[key] = None
 
-    def _result_to_dict(self, data):
-        cols_to_always_keep = ['id']
-
-        def _get_col_type(col):
-            for dtup in data.descr.descr:
-                if dtup[0] == col:
-                    return list(dtup[1:])
-            return None
-
-        result = {}
-        # fake this
-        mof_cat = np.zeros(data.size, dtype=[('flags', 'i4')])
-        result['mof'] = mof_cat
-
-        # now build each of other catalogs
-        for sh in METACAL_TYPES:
-            dtype_descr = []
-            for dtup in data.dtype.descr:
-                if dtup[0] in cols_to_always_keep:
-                    dtype_descr.append(dtup)
-                elif dtup[0].startswith('mcal_') and dtup[0].endswith(sh):
-                    dlist = [dtup[0].replace('_%s' % sh, '')]
-                    dlist = dlist + list(dtup[1:])
-                    dtype_descr.append(tuple(dlist))
-
-            sh_cat = np.zeros(len(data), dtype=dtype_descr)
-            for col in sh_cat.dtype.names:
-                sh_col = col + '_%s' % sh
-                if col in data.dtype.names:
-                    sh_cat[col] = data[col]
-                    continue
-                elif sh_col in data.dtype.names:
-                    sh_cat[col] = data[sh_col]
-                else:
-                    raise ValueError("column %s not found!" % col)
-            result[sh] = sh_cat
-
-        return result
+        self._result = data

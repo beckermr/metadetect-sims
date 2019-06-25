@@ -7,6 +7,7 @@ import numpy as np
 import ngmix
 import galsim
 import fitsio
+import scipy.spatial
 
 from .psf_homogenizer import PSFHomogenizer
 from .ps_psf import PowerSpectrumPSF
@@ -78,6 +79,12 @@ class Sim(object):
                 given, you need to have the one square degree catsim catalog
                 in the current working directory or in the directory given by
                 the environment variable 'CATSIM_DIR'.
+
+        For any gal_type, on can add
+
+            'min_dist' : float
+                Minimum distance in arcseconds between the generatd object
+                centers.
 
     homogenize_psf : bool, optional
         Apply PSF homogenization to the image.
@@ -446,7 +453,7 @@ class Sim(object):
         return self.wcs.jacobian(
             image_pos=galsim.PositionD(x=x+1, y=y+1))
 
-    def _get_dxdy(self):
+    def _get_dxdy(self, others=None, min_dist=0):
         if self.gal_grid is not None:
             yind, xind = np.unravel_index(
                 self._gal_grid_ind, (self.gal_grid, self.gal_grid))
@@ -456,10 +463,21 @@ class Sim(object):
                 yind * dg + dg/2 - self.pos_width,
                 xind * dg + dg/2 - self.pos_width)
         else:
-            return self.rng.uniform(
-                low=-self.pos_width,
-                high=self.pos_width,
-                size=2)
+            while True:
+                dx, dy = self.rng.uniform(
+                    low=-self.pos_width,
+                    high=self.pos_width,
+                    size=2)
+
+                if others is not None:
+                    tree = scipy.spatial.cKDTree(others)
+                    d, _ = tree.query(np.array([dx, dy]))
+                    if np.min(d) > min_dist:
+                        LOGGER.debug('min nbr dist: %f', np.min(d))
+                        break
+                else:
+                    break
+            return dx, dy
 
     def _get_nobj(self):
         if self.gal_grid is not None:
@@ -529,9 +547,23 @@ class Sim(object):
         if self.gal_grid is not None:
             self._gal_grid_ind = 0
 
+        gal_kws = self.gal_kws or {}
+        if 'min_dist' in gal_kws:
+            LOGGER.debug('using min dist: %f', gal_kws['min_dist'])
+            others = []
+
         for i in range(nobj):
             # unsheared offset from center of image
-            dx, dy = self._get_dxdy()
+            if 'min_dist' in gal_kws:
+                if i == 0:
+                    dx, dy = self._get_dxdy()
+                else:
+                    dx, dy = self._get_dxdy(
+                        others=np.array(others),
+                        min_dist=gal_kws['min_dist'])
+                others.append([dx, dy])
+            else:
+                dx, dy = self._get_dxdy()
 
             # get the galaxy
             if self.gal_type == 'exp':
