@@ -206,6 +206,10 @@ class MetacalTrueDetect(object):
             if res is not None:
                 for key in res:
                     if res[key] is not None:
+                        res[key] = eu.numpy_util.add_fields(
+                            res[key],
+                            [('id', 'i4')])
+                        res[key]['id'] = ind
                         data[key].append(res[key])
 
         for key in data:
