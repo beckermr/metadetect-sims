@@ -152,6 +152,17 @@ class MetacalFitter(FitterBase):
                             eu.numpy_util.copy_fields(odata, fit_data)
                             arr_res[key] = fit_data
 
+                    # make sure we have partial entries
+                    if (res['mcal_flags'] != 0 and
+                            self['metacal']['keep_all_fits']):
+                        num_failed = 0
+                        for key in result:
+                            num_failed += np.sum(
+                                arr_res[key]['mcal_flags'] != 0)
+
+                        logger.debug('%d fits failed', num_failed)
+                        assert num_failed > 0
+
                     for key in result:
                         result[key].append(arr_res[key])
 

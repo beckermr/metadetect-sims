@@ -176,9 +176,9 @@ class MetacalTrueDetect(object):
 
         for key in self._result:
             msk = np.sum(
-                (self._result[key]['flags'] == 0) &
-                (self._result[key]['mcal_flags'] == 0))
-            logger.debug('%s: %d entries in catalog', key, msk)
+                (self._result[key]['flags'] != 0) |
+                (self._result[key]['mcal_flags'] != 0))
+            logger.debug('%s: %d failed entries in catalog', key, msk)
 
         return self._result
 

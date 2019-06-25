@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import esutil as eu
 
@@ -6,6 +7,8 @@ from .util import get_masked_frac
 from .fofs import get_fofs
 from .mof_fitter import MOFFitter
 from .metacal_fitter import MetacalFitter, METACAL_TYPES
+
+logger = logging.getLogger(__name__)
 
 
 class MetacalPlusMOF(object):
@@ -43,6 +46,12 @@ class MetacalPlusMOF(object):
         """The fitting results."""
         if not hasattr(self, '_result'):
             raise RuntimeError('run go() first')
+
+        for key in self._result:
+            msk = np.sum(
+                (self._result[key]['flags'] != 0) |
+                (self._result[key]['mcal_flags'] != 0))
+            logger.debug('%s: %d failed entries in catalog', key, msk)
 
         return self._result
 
