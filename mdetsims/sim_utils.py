@@ -12,6 +12,7 @@ from .psf_homogenizer import PSFHomogenizer
 from .ps_psf import PowerSpectrumPSF
 from .masking import generate_bad_columns, generate_cosmic_rays
 from .interp import interpolate_image_and_noise
+from .cs_interp import interpolate_image_and_noise_cs
 from .symmetrize import symmetrize_bad_mask
 
 LOGGER = logging.getLogger(__name__)
@@ -92,6 +93,13 @@ class Sim(object):
         `mask_and_interp` is True.
     bad_columns_kws : dict, optional
         A set of keyword arguments to pass to the bad column generator.
+    interpolation_type : str, optional
+        One of
+
+            'cubic' : a 2d cubic interpolation
+            'cs-fourier' : a Fourier basis compressed sensing interpolant
+
+        The default is 'cubic'.
 
     Methods
     -------
@@ -141,7 +149,8 @@ class Sim(object):
             mask_and_interp=False,
             add_bad_columns=True,
             add_cosmic_rays=True,
-            bad_columns_kws=None):
+            bad_columns_kws=None,
+            interpolation_type='cubic'):
         self.rng = rng
         self.noise_rng = np.random.RandomState(seed=rng.randint(1, 2**32-1))
         self.gal_type = gal_type
@@ -167,6 +176,7 @@ class Sim(object):
         self.add_bad_columns = add_bad_columns
         self.add_cosmic_rays = add_cosmic_rays
         self.bad_columns_kws = bad_columns_kws or {}
+        self.interpolation_type = interpolation_type
 
         self.area_sqr_arcmin = ((self.dim - 2*self.buff) * scale / 60)**2
 
@@ -405,11 +415,23 @@ class Sim(object):
 
         # now we inteprolate the pixels in the noise and image field
         # that are masked
-        _im, _nse = interpolate_image_and_noise(
-            image=image,
-            noise=noise,
-            bad_mask=bad_mask,
-            rng=self.noise_rng)
+        if self.interpolation_type == 'cs-fourier':
+            _im, _nse = interpolate_image_and_noise_cs(
+                image=image,
+                noise=noise,
+                bad_mask=bad_mask,
+                rng=self.noise_rng,
+                c=50,
+                sampling_rate=1)
+        elif self.interpolation_type == 'cubic':
+            _im, _nse = interpolate_image_and_noise(
+                image=image,
+                noise=noise,
+                bad_mask=bad_mask,
+                rng=self.noise_rng)
+        else:
+            raise ValueError(
+                'interpolation "%s" is not defined' % self.interpolation_type)
 
         return _im, _nse, bad_mask.astype(np.int32)
 
