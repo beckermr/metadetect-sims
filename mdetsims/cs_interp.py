@@ -34,7 +34,10 @@ def _interpolate_image_cs(image, sample_mask, c=15):
         np.copyto(g, AtAxb)
         return fx
 
-    x0 = _dct2(image).ravel()
+    x0 = _idct2(image).ravel()
+    finite_mask = ~np.isfinite(x0)
+    if np.any(finite_mask):
+        x0[finite_mask] = 0.0
     x = fmin_lbfgs(_evaluate, x0, orthantwise_c=c, line_search='wolfe')
 
     # transform the output back into the spatial domain
