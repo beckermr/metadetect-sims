@@ -53,7 +53,8 @@ jobs:
               tqdm \
               scikit-learn \
               esutil \
-              meds
+              meds \
+              pylbfgs
             conda update --all -y -q
             pip install git+https://github.com/esheldon/metadetect.git \
               --force-reinstall --no-deps --no-cache-dir
