@@ -413,6 +413,9 @@ class Sim(object):
         # applies a 90 degree rotation to make it symmetric
         symmetrize_bad_mask(bad_mask)
 
+        # muck the image
+        image[bad_mask] = 1e12
+
         # now we inteprolate the pixels in the noise and image field
         # that are masked
         if self.interpolation_type == 'cs-fourier':
