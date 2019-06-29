@@ -9,9 +9,10 @@ import galsim
 import fitsio
 
 # from .ps_psf import PowerSpectrumPSF
-# from .masking import generate_bad_columns, generate_cosmic_rays
-# from .interp import interpolate_image_and_noise
-# from .symmetrize import symmetrize_bad_mask
+from .masking import generate_bad_columns, generate_cosmic_rays
+from .interp import interpolate_image_and_noise
+from .cs_interp import interpolate_image_and_noise_cs
+from .symmetrize import symmetrize_bad_mask
 from .coadd import coadd_image_noise_interpfrac, coadd_psfs
 from .wcs_gen import gen_affine_wcs
 
@@ -100,6 +101,15 @@ class End2EndSim(object):
         `mask_and_interp` is True.
     bad_columns_kws : dict, optional
         A set of keyword arguments to pass to the bad column generator.
+    symmetrize_masking : bool, optional
+        Symmetrize the masked regions with a 90 degree rotation.
+    interpolation_type : str, optional
+        One of
+
+            'cubic' : a 2d cubic interpolation
+            'cs-fourier' : a Fourier basis compressed sensing interpolant
+
+        The default is 'cubic'.
 
     Methods
     -------
@@ -146,7 +156,9 @@ class End2EndSim(object):
             mask_and_interp=False,
             add_bad_columns=True,
             add_cosmic_rays=True,
-            bad_columns_kws=None):
+            bad_columns_kws=None,
+            symmetrize_masking=True,
+            interpolation_type='cubic'):
         self.rng = rng
         self.noise_rng = np.random.RandomState(seed=rng.randint(1, 2**32-1))
         self.gal_type = gal_type
@@ -166,6 +178,8 @@ class End2EndSim(object):
         self.add_bad_columns = add_bad_columns
         self.add_cosmic_rays = add_cosmic_rays
         self.bad_columns_kws = bad_columns_kws or {}
+        self.interpolation_type = interpolation_type
+        self.symmetrize_masking = symmetrize_masking
         self.noise = np.array(noise) * np.ones(n_bands)
 
         self.area_sqr_arcmin = ((self.dim - 2*self.buff) * scale / 60)**2
@@ -397,6 +411,7 @@ class End2EndSim(object):
                 jacobian=obs_jac,
                 psf=psf_obs,
                 noise=coadd_noise)
+            obs.meta['fmask'] = coadd_intp
 
             obslist = ngmix.ObsList()
             obslist.append(obs)
@@ -455,18 +470,23 @@ class End2EndSim(object):
         se_noises = []
         se_interp_fracs = []
         coadd_wgts = []
+        final_se_images = []
         for se_im in se_images:
             se_im += self.noise_rng.normal(
                 scale=self.noise[band], size=se_im.shape)
-            se_noises.append(
-                self.noise_rng.normal(size=se_im.shape) * self.noise[band])
-            se_interp_fracs.append(np.zeros_like(se_im))
+            se_nse = self.noise_rng.normal(size=se_im.shape) * self.noise[band]
 
             if self.mask_and_interp:
-                # TODO mask and interp images
-                LOGGER.debug(
-                    'masking and interpolation is not yet implemented!')
-                pass
+                final_se_im, se_nse, bad_msk = self._mask_and_interp(
+                    se_im, se_nse)
+                se_interp_frac = bad_msk.astype(np.float32)
+            else:
+                final_se_im = se_im
+                se_interp_frac = np.zeros_like(se_im)
+
+            final_se_images.append(final_se_im)
+            se_noises.append(se_nse)
+            se_interp_fracs.append(se_interp_frac)
 
             coadd_wgts.append(1.0 / self.noise[band]**2)
 
@@ -474,44 +494,57 @@ class End2EndSim(object):
 
         # coadd them
         coadd_im, coadd_noise, coadd_intp = coadd_image_noise_interpfrac(
-            se_images, se_noises, se_interp_fracs, wcs_objs,
+            final_se_images, se_noises, se_interp_fracs, wcs_objs,
             coadd_wgts, self.scale, self.dim)
 
-        # TODO coadd bmask and set
-        LOGGER.debug(
-            'bmask is not yet set properly!')
         coadd_bmask = np.zeros_like(coadd_im, dtype=np.int32)
+        coadd_bmask[coadd_intp > 0] = 1
 
         return coadd_im, coadd_noise, coadd_intp, coadd_bmask, coadd_wgts
 
-    #
-    # def _mask_and_interp(self, image, noise):
-    #     LOGGER.debug('applying masking and interpolation')
-    #
-    #     # here we make the mask
-    #     bad_mask = np.zeros(image.shape, dtype=np.bool)
-    #     if self.add_bad_columns:
-    #         bad_mask |= generate_bad_columns(
-    #             image.shape, rng=self.noise_rng,
-    #             mean_bad_cols=self.n_coadd_msk,
-    #             **self.bad_columns_kws)
-    #     if self.add_cosmic_rays:
-    #         bad_mask |= generate_cosmic_rays(
-    #             image.shape, rng=self.noise_rng,
-    #             mean_cosmic_rays=self.n_coadd_msk)
-    #
-    #     # applies a 90 degree rotation to make it symmetric
-    #     symmetrize_bad_mask(bad_mask)
-    #
-    #     # now we inteprolate the pixels in the noise and image field
-    #     # that are masked
-    #     _im, _nse = interpolate_image_and_noise(
-    #         image=image,
-    #         noise=noise,
-    #         bad_mask=bad_mask,
-    #         rng=self.noise_rng)
-    #
-    #     return _im, _nse, bad_mask.astype(np.int32)
+    def _mask_and_interp(self, image, noise):
+        LOGGER.debug('applying masking and interpolation')
+
+        # here we make the mask
+        bad_mask = np.zeros(image.shape, dtype=np.bool)
+        if self.add_bad_columns:
+            bad_mask |= generate_bad_columns(
+                image.shape, rng=self.noise_rng,
+                mean_bad_cols=1,
+                **self.bad_columns_kws)
+        if self.add_cosmic_rays:
+            bad_mask |= generate_cosmic_rays(
+                image.shape, rng=self.noise_rng,
+                mean_cosmic_rays=1)
+
+        # applies a 90 degree rotation to make it symmetric
+        if self.symmetrize_masking:
+            symmetrize_bad_mask(bad_mask)
+
+        # muck the image
+        image[bad_mask] = 1e12
+
+        # now we inteprolate the pixels in the noise and image field
+        # that are masked
+        if self.interpolation_type == 'cs-fourier':
+            _im, _nse = interpolate_image_and_noise_cs(
+                image=image,
+                noise=noise,
+                bad_mask=bad_mask,
+                rng=self.noise_rng,
+                c=1000,
+                sampling_rate=1)
+        elif self.interpolation_type == 'cubic':
+            _im, _nse = interpolate_image_and_noise(
+                image=image,
+                noise=noise,
+                bad_mask=bad_mask,
+                rng=self.noise_rng)
+        else:
+            raise ValueError(
+                'interpolation "%s" is not defined' % self.interpolation_type)
+
+        return _im, _nse, bad_mask.astype(np.int32)
 
     def _coadd_psfs(self, *, band, wcs_objs, coadd_wgts, method):
         psf_dim = 53
