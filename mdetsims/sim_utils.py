@@ -46,6 +46,10 @@ class Sim(object):
         default of None uses the same number of PSFs as `n_coadd`.
     n_coadd_msk : int, optional
         A number to scale the masking effects. The default is 1.
+    shear_scene_frac : float, optional
+        The fraction of the objects for which the full scene is sheared. If you
+        set this to a non-None value overrides the `shear_scene` keyword
+        argument.
     g1 : float, optional
         The simulated shear for the 1-axis.
     g2 : float, optional
@@ -134,6 +138,7 @@ class Sim(object):
             rng, gal_type, psf_type,
             scale,
             shear_scene=True,
+            shear_scene_frac=None,
             n_coadd=1,
             n_coadd_psf=None,
             n_coadd_msk=1,
@@ -160,6 +165,7 @@ class Sim(object):
         self.g1 = g1
         self.g2 = g2
         self.shear_scene = shear_scene
+        self.shear_scene_frac = shear_scene_frac
         self.dim = dim
         self.buff = buff
         # assumed to be one band unless otherwise specified via the
@@ -556,7 +562,17 @@ class Sim(object):
                 raise ValueError('gal_type "%s" not valid!' % self.gal_type)
 
             # compute the final image position
-            if self.shear_scene:
+            if self.shear_scene_frac is not None:
+                if self.rng.uniform() < self.shear_scene_frac:
+                    _shear_the_scene = True
+                else:
+                    _shear_the_scene = False
+            elif self.shear_scene:
+                _shear_the_scene = True
+            else:
+                _shear_the_scene = False
+
+            if _shear_the_scene:
                 sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
             else:
                 sdx = dx
