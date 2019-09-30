@@ -58,7 +58,7 @@ jobs:
             conda update --all -y -q
             pip install git+https://github.com/esheldon/metadetect.git \
               --force-reinstall --no-deps --no-cache-dir
-            pip install git+https://github.com/esheldon/mof.git \
+            pip install git+https://github.com/beckermr/mof.git@bugs \
               --force-reinstall --no-deps --no-cache-dir
 
             pip install -e .

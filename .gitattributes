@@ -1,0 +1,14 @@
+runs/*/do_fit_condor.py linguist-generated=true
+runs/*/gather_condor_outputs.py linguist-generated=true
+runs/*/job_condor.sh linguist-generated=true
+runs/*/make_condor_job_script.py linguist-generated=true
+runs/*/run_preamble.py linguist-generated=true
+runs/*/run_sim_condor.py linguist-generated=true
+runs/*/run_sim.py linguist-generated=true
+runs_end2end/*/do_fit_condor.py linguist-generated=true
+runs_end2end/*/gather_condor_outputs.py linguist-generated=true
+runs_end2end/*/job_condor.sh linguist-generated=true
+runs_end2end/*/make_condor_job_script.py linguist-generated=true
+runs_end2end/*/run_preamble.py linguist-generated=true
+runs_end2end/*/run_sim_condor.py linguist-generated=true
+runs_end2end/*/run_sim.py linguist-generated=true
