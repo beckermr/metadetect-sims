@@ -1,0 +1,7 @@
+runs/*/do_fit_condor.py linguist-generated
+runs/*/gather_condor_outputs.py linguist-generated
+runs/*/job_condor.sh linguist-generated
+runs/*/make_condor_job_script.py linguist-generated
+runs/*/run_preamble.py linguist-generated
+runs/*/run_sim_condor.py linguist-generated
+runs/*/run_sim.py linguist-generated
