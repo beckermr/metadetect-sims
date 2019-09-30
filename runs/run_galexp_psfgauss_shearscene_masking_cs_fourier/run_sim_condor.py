@@ -5,35 +5,23 @@ import joblib
 
 import numpy as np
 
-from mdetsims import Sim, TEST_METACAL_MOF_CONFIG, TEST_METADETECT_CONFIG
-from mdetsims.metacal import MetacalPlusMOF
+from mdetsims.metacal import (
+    MetacalPlusMOF,
+    MetacalTrueDetect,
+    MetacalSepDetect)
 from mdetsims.run_utils import (
     measure_shear_metadetect, measure_shear_metacal_plus_mof)
 from metadetect.metadetect import Metadetect
 from config import CONFIG
 
-try:
-    from config import CUT_INTERP
-except ImportError:
-    CUT_INTERP = False
+from run_preamble import get_shear_meas_config
 
-try:
-    from config import DO_METACAL_MOF
-except Exception:
-    DO_METACAL_MOF = False
+(SWAP12, CUT_INTERP, DO_METACAL_MOF, DO_METACAL_SEP,
+ DO_METACAL_TRUEDETECT,
+ SHEAR_MEAS_CONFIG, SIM_CLASS) = get_shear_meas_config()
 
-try:
-    from config import SWAP12
-except ImportError:
-    SWAP12 = False
-
-try:
-    from config import EXTRA_MDET_CONFIG
-    TEST_METADETECT_CONFIG.update(EXTRA_MDET_CONFIG)
-except ImportError:
-    pass
-
-if DO_METACAL_MOF:
+# code to do computation
+if DO_METACAL_MOF or DO_METACAL_TRUEDETECT or DO_METACAL_SEP:
     def _meas_shear(res, *, s2n_cut):
         return measure_shear_metacal_plus_mof(
             res, s2n_cut=s2n_cut, t_ratio_cut=0.5)
@@ -58,68 +46,71 @@ def _add_shears(cfg, plus=True):
 
 
 def _run_sim(seed):
+    config = {}
+    config.update(SHEAR_MEAS_CONFIG)
+
     try:
+        # pos shear
+        rng = np.random.RandomState(seed=seed)
+        _add_shears(CONFIG, plus=True)
+        if SWAP12:
+            assert CONFIG['g1'] == 0.0
+            assert CONFIG['g2'] == 0.02
+        else:
+            assert CONFIG['g1'] == 0.02
+            assert CONFIG['g2'] == 0.0
+        sim = SIM_CLASS(rng=rng, **CONFIG)
 
         if DO_METACAL_MOF:
-            config = {}
-            config.update(TEST_METACAL_MOF_CONFIG)
-
-            rng = np.random.RandomState(seed=seed)
-            _add_shears(CONFIG, plus=True)
-            if SWAP12:
-                assert CONFIG['g1'] == 0.0
-                assert CONFIG['g2'] == 0.02
-            else:
-                assert CONFIG['g1'] == 0.02
-                assert CONFIG['g2'] == 0.0
-            mbobs = Sim(rng=rng, **CONFIG).get_mbobs()
+            mbobs = sim.get_mbobs()
             md = MetacalPlusMOF(config, mbobs, rng)
             md.go()
-            pres = md.result
-
-            rng = np.random.RandomState(seed=seed)
-            _add_shears(CONFIG, plus=False)
-            if SWAP12:
-                assert CONFIG['g1'] == 0.0
-                assert CONFIG['g2'] == -0.02
-            else:
-                assert CONFIG['g1'] == -0.02
-                assert CONFIG['g2'] == 0.0
-            mbobs = Sim(rng=rng, **CONFIG).get_mbobs()
-            md = MetacalPlusMOF(config, mbobs, rng)
+        elif DO_METACAL_SEP:
+            mbobs = sim.get_mbobs()
+            md = MetacalSepDetect(config, mbobs, rng)
             md.go()
-            mres = md.result
-
+        elif DO_METACAL_TRUEDETECT:
+            mbobs, tcat = sim.get_mbobs(return_truth_cat=True)
+            md = MetacalTrueDetect(config, mbobs, rng, tcat)
+            md.go()
         else:
-            config = {}
-            config.update(TEST_METADETECT_CONFIG)
-
-            rng = np.random.RandomState(seed=seed)
-            _add_shears(CONFIG, plus=True)
-            if SWAP12:
-                assert CONFIG['g1'] == 0.0
-                assert CONFIG['g2'] == 0.02
-            else:
-                assert CONFIG['g1'] == 0.02
-                assert CONFIG['g2'] == 0.0
-            mbobs = Sim(rng=rng, **CONFIG).get_mbobs()
+            mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()
-            pres = md.result
 
-            rng = np.random.RandomState(seed=seed)
-            _add_shears(CONFIG, plus=False)
-            if SWAP12:
-                assert CONFIG['g1'] == 0.0
-                assert CONFIG['g2'] == -0.02
-            else:
-                assert CONFIG['g1'] == -0.02
-                assert CONFIG['g2'] == 0.0
-            mbobs = Sim(rng=rng, **CONFIG).get_mbobs()
+        pres = md.result
+
+        # neg shear
+        rng = np.random.RandomState(seed=seed)
+        _add_shears(CONFIG, plus=False)
+        if SWAP12:
+            assert CONFIG['g1'] == 0.0
+            assert CONFIG['g2'] == -0.02
+        else:
+            assert CONFIG['g1'] == -0.02
+            assert CONFIG['g2'] == 0.0
+        sim = SIM_CLASS(rng=rng, **CONFIG)
+
+        if DO_METACAL_MOF:
+            mbobs = sim.get_mbobs()
+            md = MetacalPlusMOF(config, mbobs, rng)
+            md.go()
+        elif DO_METACAL_SEP:
+            mbobs = sim.get_mbobs()
+            md = MetacalSepDetect(config, mbobs, rng)
+            md.go()
+        elif DO_METACAL_TRUEDETECT:
+            mbobs, tcat = sim.get_mbobs(return_truth_cat=True)
+            md = MetacalTrueDetect(config, mbobs, rng, tcat)
+            md.go()
+        else:
+            mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()
-            mres = md.result
 
+        mres = md.result
+
+        # final shear meas
         outputs = {}
         for s2n in [10, 15, 20]:
             outputs[s2n] = (
@@ -135,6 +126,10 @@ def _run_sim(seed):
 
 if DO_METACAL_MOF:
     print('running metacal+MOF', flush=True)
+elif DO_METACAL_SEP:
+    print('running metacal+SEP', flush=True)
+elif DO_METACAL_TRUEDETECT:
+    print('running metacal+true detection', flush=True)
 else:
     print('running metadetect', flush=True)
 print('config:', CONFIG, flush=True)

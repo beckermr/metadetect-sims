@@ -1,7 +1,10 @@
+import logging
 import numpy as np
 import tqdm
 
 from .metacal import METACAL_TYPES
+
+logger = logging.getLogger(__name__)
 
 
 def cut_nones(presults, mresults):
@@ -234,15 +237,17 @@ def measure_shear_metacal_plus_mof(res, *, s2n_cut, t_ratio_cut):
     g2 : float
         The mean 2-component shape for the zero-shear metacal measurement.
     """
-    def _mask(mof, cat, s2n_cut=10, size_cut=0.5):
+    def _mask(cat):
         return (
-            (mof['flags'] == 0) &
+            (cat['flags'] == 0) &
+            (cat['mcal_flags'] == 0) &
             (cat['mcal_s2n'] > s2n_cut) &
             (cat['mcal_T_ratio'] > t_ratio_cut))
 
     msks = {}
     for sh in METACAL_TYPES:
-        msks[sh] = _mask(res['mof'], res[sh])
+        logger.debug('%s: %s', sh, res[sh].dtype)
+        msks[sh] = _mask(res[sh])
         if not np.any(msks[sh]):
             return None
 
