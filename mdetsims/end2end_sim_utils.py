@@ -8,7 +8,7 @@ import ngmix
 import galsim
 import fitsio
 
-# from .ps_psf import PowerSpectrumPSF
+from .ps_psf import PowerSpectrumPSF
 from .masking import generate_bad_columns, generate_cosmic_rays
 from .interp import interpolate_image_and_noise
 from .cs_interp import interpolate_image_and_noise_cs
@@ -717,6 +717,22 @@ class End2EndSim(object):
 
         return all_band_obj, uv_positions
 
+    def _make_ps_psfs(self):
+        kwargs = self.psf_kws or {}
+        self._ps_psfs = []
+        for band in range(self.n_bands):
+            band_psfs = []
+            for epoch in range(self.n_coadd):
+                band_psfs.append(
+                    PowerSpectrumPSF(
+                        rng=self.rng,
+                        im_width=self.dim,
+                        buff=self.dim/2,
+                        scale=self.scale,
+                        **kwargs)
+                )
+            self._ps_psfs.append(band_psfs)
+
     def _get_psf_model(self, *, band, epoch, x, y):
         if not hasattr(self, '_psf_fwhms'):
             kws = self.psf_kws or {}
@@ -747,5 +763,10 @@ class End2EndSim(object):
                 self._psf_fwhms[band][epoch] / self._psf_fwhm
             ).shear(
                 self._psf_shears[band][epoch])
+        elif self.psf_type == 'ps':
+            if not hasattr(self, '_ps_psfs'):
+                self._make_ps_psfs()
+            return self._ps_psfs[band][epoch].getPSF(
+                galsim.PositionD(x=x, y=y))
         else:
             raise ValueError('psf_type "%s" not valid!' % self.psf_type)
