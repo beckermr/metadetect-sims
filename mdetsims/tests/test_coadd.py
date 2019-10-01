@@ -129,8 +129,6 @@ def test_coadd_psfs(crazy_wcs, crazy_psf):
         scale=scale).array
     true_coadd_psf /= np.sum(true_coadd_psf)
 
-    # IDK if the code is right, but it works to machine precision when
-    # everything is aligned
     if not crazy_psf and not crazy_wcs:
         rtol = 0
         atol = 1e-7
@@ -261,3 +259,6 @@ def test_coadd_image_noise_interpfrac(crazy_wcs, crazy_obj):
         print(np.max(np.abs(coadd_img - true_coadd_img)))
 
     assert np.allclose(coadd_img, true_coadd_img, rtol=rtol, atol=atol)
+    assert np.all(np.isfinite(coadd_nse))
+    assert np.all(np.isfinite(coadd_intp))
+    assert np.all((coadd_intp >= 0) & (coadd_intp <= 1))
