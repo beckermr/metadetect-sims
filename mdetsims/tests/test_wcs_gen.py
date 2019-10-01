@@ -28,10 +28,16 @@ def test_gen_affine_wcs():
         low=-0.5,
         high=0.5) * scale
 
-    assert np.allclose(wcs.x0, 10)
-    assert np.allclose(wcs.y0, 11)
-    assert np.allclose(wcs.u0, 20 + dither_u)
-    assert np.allclose(wcs.v0, 21 + dither_v)
+    inv_jac_mat = np.linalg.inv(wcs.jacobian().getMatrix())
+    dxdy = np.dot(inv_jac_mat, np.array([dither_u, dither_v]))
+
+    assert np.allclose(wcs.x0, 10 + dxdy[0])
+    assert np.allclose(wcs.y0, 11 + dxdy[1])
+    assert np.allclose(wcs.u0, 20)
+    assert np.allclose(wcs.v0, 21)
+
+    im_pos = wcs.posToImage(galsim.PositionD(x=20, y=21))
+    assert im_pos.x == 10 + dxdy[0], im_pos.y == 11 + dxdy[1]
 
     jac_wcs = wcs.jacobian()
     _scale, _shear, _theta, _ = jac_wcs.getDecomposition()

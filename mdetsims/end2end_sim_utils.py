@@ -609,8 +609,9 @@ class End2EndSim(object):
                         scale=self.scale,
                         scale_frac_std=self.scale_frac_std,
                         shear_std=self.wcs_shear_std,
-                        world_origin=world_origin,  # this gets a dither
-                        origin=origin))
+                        world_origin=world_origin,
+                        origin=origin  # this gets a dither
+                    ))
 
                 self._band_wcs_objs.append(wcs_objs)
 

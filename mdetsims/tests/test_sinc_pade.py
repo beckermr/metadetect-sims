@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..lanczos import sinc_pade
+from ..sinc_pade import sinc_pade
 
 
 def test_sinc_pade():

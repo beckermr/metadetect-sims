@@ -1,44 +1,19 @@
+import math
 import numpy as np
+
 from numba import njit
 
 
-@njit
-def sinc_pade(x):
-    """A pseudo-Pade approximation to sinc.
-
-    When used in lanczos interpolation, this approximation to the sinc
-    function has error in the kernel of at most ~1.03019e-05 and is exactly
-    zero at x = 1, 2, 3 and exactly 1 at x = 0.
-    """
-    x = np.abs(x)
-    num = (  # noqa
-        -0.166666666666666 + x * (
-        -0.289176685343373 + x * (
-        -0.109757669089546 + x * (
-        0.0350931080575596 + x * (
-        0.0229947584643336 + x * (
-        -0.00089363958201935 + x * (
-        -0.00162722192965722 + x * (
-        -3.00689146075626e-05 + x * (
-        5.13864469774294e-05 + x * (
-        1.23561563382214e-06 + x * (
-        -6.37392253619041e-07))))))))))) * (x-1) * (x-2) * (x-3)
-    den = (  # noqa
-        1 + x * (
-        -0.0982732212730775 + x * (
-        0.122536542608403 + x * (
-        -0.0111525324680647 + x * (
-        0.00724707512833019 + x * (
-        -0.000584774445653404 + x * (
-        0.000262528048296579 + x * (
-        -1.71596576734417e-05 + x * (
-        5.91945411660804e-06 + x * (
-        -2.44174818579491e-07 + x * (
-        6.74473938075399e-08)))))))))))
-    return num / den
+@njit(fastmath=True)
+def sinc(x):
+    if abs(x) < 1e-4:
+        return 1 - (math.pi * math.pi / 6) * x * x
+    else:
+        ax = math.pi * x
+        return np.sin(ax) / ax
 
 
-@njit
+@njit(fastmath=True)
 def lanczos_resample_one(im1, rows, cols):
     """Lanczos resample one image at the input row and column positions.
 
@@ -98,14 +73,14 @@ def lanczos_resample_one(im1, rows, cols):
                 continue
 
             dy = y - y_pix
-            sy = sinc_pade(dy) * sinc_pade(dy/a)
+            sy = sinc(dy) * sinc(dy/a)
 
             for x_pix in range(x_s, x_f+1):
                 if x_pix < 0 or x_pix > nx-1:
                     continue
 
                 dx = x - x_pix
-                sx = sinc_pade(dx) * sinc_pade(dx/a)
+                sx = sinc(dx) * sinc(dx/a)
 
                 kernel = sx*sy
 
@@ -116,7 +91,7 @@ def lanczos_resample_one(im1, rows, cols):
     return res1, edge
 
 
-@njit
+@njit(fastmath=True)
 def lanczos_resample_three(im1, im2, im3, rows, cols):
     """Lanczos resample three images at the input row and column positions.
 
@@ -184,14 +159,14 @@ def lanczos_resample_three(im1, im2, im3, rows, cols):
                 continue
 
             dy = y - y_pix
-            sy = sinc_pade(dy) * sinc_pade(dy/a)
+            sy = sinc(dy) * sinc(dy/a)
 
             for x_pix in range(x_s, x_f+1):
                 if x_pix < 0 or x_pix > nx-1:
                     continue
 
                 dx = x - x_pix
-                sx = sinc_pade(dx) * sinc_pade(dx/a)
+                sx = sinc(dx) * sinc(dx/a)
 
                 kernel = sx*sy
 

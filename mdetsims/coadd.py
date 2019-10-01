@@ -45,9 +45,29 @@ def coadd_image_noise_interpfrac(
 
     Parameters
     ----------
+    se_images : list of np.ndarray
+        The list of SE images to coadd.
+    se_noises : list of np.ndarray
+        The list of SE noise images to coadd.
+    se_interp_fracs : list of np.ndarray
+        The list of SE interpolated fraction images to coadd.
+    se_wcs_objs : list of galsim.BaseWCS or children
+        The WCS objects for each of the SE images.
+    coadd_wgts : 1d array-like object of floats
+        The relative coaddng weights for each of the SE images.
+    coadd_scale : float
+        The pixel scale of desired coadded image.
+    coadd_dim : int
+        The number of pixels desired for the final coadd image..
 
     Returns
     -------
+    img : np.ndarray, shape (coadd_dim, coadd_dim)
+        The coadd image.
+    nse : np.ndarray, shape (coadd_dim, coadd_dim)
+        The coadd noise image.
+    intp : np.ndarray, shape (coadd_dim, coadd_dim)
+        The interpolated flux fraction in each coadd pixel.
     """
 
     # coadd pixel coords
@@ -66,11 +86,18 @@ def coadd_image_noise_interpfrac(
 
         se_x, se_y = invert_affine_transform_wcs(u, v, se_wcs)
         im, nse, intp, _ = lanczos_resample_three(
-            se_im, se_nse, se_intp, se_y, se_x)
+            se_im / se_wcs.pixelArea(),
+            se_nse / se_wcs.pixelArea(),
+            se_intp,
+            se_y,
+            se_x)
 
         coadd_image += (im.reshape((coadd_dim, coadd_dim)) * wgt)
         coadd_noise += (nse.reshape((coadd_dim, coadd_dim)) * wgt)
         coadd_intp += (intp.reshape((coadd_dim, coadd_dim)) * wgt)
+
+    coadd_image *= (coadd_scale**2)
+    coadd_noise *= (coadd_scale**2)
 
     return coadd_image, coadd_noise, coadd_intp
 
@@ -82,9 +109,26 @@ def coadd_psfs(
 
     Parameters
     ----------
+    se_psfs : list of np.ndarray
+        The list of SE PSF images to coadd.
+    se_wcs_objs : list of galsim.BaseWCS or children
+        The WCS objects for each of the SE PSFs.
+    coadd_wgts : 1d array-like object of floats
+        The relative coaddng weights for each of the SE PSFs.
+    coadd_scale : float
+        The pixel scale of desired coadded PSF image.
+    coadd_dim : int
+        The number of pixels desired for the final coadd PSF.
+    coadd_offset : float
+        The offset in pixels of the start of the coadd PSF image stamp.
+    se_offsets : list of tuples of floats
+        The offset in the SE image coords of the start of the SE PSF
+        image.
 
     Returns
     -------
+    psf : np.ndarray
+        The coadded PSF image.
     """
 
     # coadd pixel coords
@@ -102,7 +146,8 @@ def coadd_psfs(
         se_x, se_y = invert_affine_transform_wcs(u, v, se_wcs)
         se_x -= se_offset[0]
         se_y -= se_offset[1]
-        im, _ = lanczos_resample_one(se_psf, se_y, se_x)
+        im, _ = lanczos_resample_one(se_psf / se_wcs.pixelArea(), se_y, se_x)
         coadd_image += (im.reshape((coadd_dim, coadd_dim)) * wgt)
+    coadd_image *= (coadd_scale**2)
 
     return coadd_image

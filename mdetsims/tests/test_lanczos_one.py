@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ..lanczos import lanczos_resample_one, sinc_pade
+from ..lanczos import lanczos_resample_one
 
 
 def test_lanczos3_resample_one_smoke():
@@ -29,8 +29,8 @@ def test_lanczos3_resample_one_smoke():
 
                 true_val += (
                     im[r, c] *
-                    sinc_pade(dr) * sinc_pade(dr/3) *
-                    sinc_pade(dc) * sinc_pade(dc/3))
+                    np.sinc(dr) * np.sinc(dr/3) *
+                    np.sinc(dc) * np.sinc(dc/3))
 
         assert np.allclose(val, true_val)
 

@@ -16,8 +16,7 @@ def gen_affine_wcs(
         The range of position angles to select from for rotating the image
         WCS coordinares.
     dither_range : 2-tuple of floats
-        The lowest and highest dither in coadd pixels of the center of the
-        image.
+        The lowest and highest dither in world coordinates.
     scale : float
         The mean pixel scale of the image,
     scale_frac_std : float
@@ -29,7 +28,8 @@ def gen_affine_wcs(
         world coordinate system.
     origin : galsim.PositionD
         The location of the origin of the world coordinate system in the
-        image coordinate system.
+        image coordinate system. Note that the imaage origin is dithered if
+        requested to keep the world origin fixed.
 
     Returns
     -------
@@ -64,9 +64,10 @@ def gen_affine_wcs(
     dudy = jac_matrix[0, 1]
     dvdx = jac_matrix[1, 0]
     dvdy = jac_matrix[1, 1]
+    dxdy = np.dot(np.linalg.inv(jac_matrix), np.array([dither_u, dither_v]))
 
     return galsim.AffineTransform(
         dudx, dudy, dvdx, dvdy,
-        origin=origin,
-        world_origin=world_origin + galsim.PositionD(x=dither_u, y=dither_v)
+        origin=origin + galsim.PositionD(x=dxdy[0], y=dxdy[1]),
+        world_origin=world_origin,
     )
