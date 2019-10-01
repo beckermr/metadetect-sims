@@ -116,3 +116,19 @@ venv.bak/
 *.png
 *.pdf
 *.csv
+
+# we are going to copy these by hand from now on
+runs/*/do_fit_condor.py
+runs/*/gather_condor_outputs.py
+runs/*/job_condor.sh
+runs/*/make_condor_job_script.py
+runs/*/run_preamble.py
+runs/*/run_sim_condor.py
+runs/*/run_sim.py
+runs_end2end/*/do_fit_condor.py
+runs_end2end/*/gather_condor_outputs.py
+runs_end2end/*/job_condor.sh
+runs_end2end/*/make_condor_job_script.py
+runs_end2end/*/run_preamble.py
+runs_end2end/*/run_sim_condor.py
+runs_end2end/*/run_sim.py
