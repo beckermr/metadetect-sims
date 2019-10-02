@@ -9,6 +9,8 @@ CONFIG = {
     'scale_frac_std': 0.03,
     'wcs_shear_std': 0.03,
     'wcs_dither_range': (-0.5, 0.5),
+    'mask_and_interp': True,
+    'interpolation_type': 'cubic',
 }
 
 DO_END2END_SIM = True
