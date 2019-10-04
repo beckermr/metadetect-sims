@@ -10,8 +10,7 @@ CONFIG = {
     'wcs_shear_std': 0.03,
     'wcs_dither_range': (-0.5, 0.5),
     'mask_and_interp': True,
-    'interpolation_type': 'cubic',
+    'interpolation_type': 'cs-fourier',
 }
 
 DO_END2END_SIM = True
-N_PATCHES = 10_000_000
