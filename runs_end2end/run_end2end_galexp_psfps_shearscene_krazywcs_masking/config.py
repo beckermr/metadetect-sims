@@ -2,7 +2,7 @@ CONFIG = {
     'gal_type': 'exp',
     'psf_type': 'ps',
     'shear_scene': True,
-    'n_coadd': 5,
+    'n_coadd': 10,
     'scale': 0.263,
     'n_bands': 3,
     'position_angle_range': (0, 360),
