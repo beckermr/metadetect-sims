@@ -10,7 +10,7 @@ CONFIG = {
     'wcs_shear_std': 0.03,
     'wcs_dither_range': (-0.5, 0.5),
     'mask_and_interp': True,
-    'interpolation_type': 'cs-fourier',
+    'interpolation_type': 'cubic',
     'gal_kws': {
         'survey_name': 'DES',
         'bands': ('r', 'i', 'z')},
