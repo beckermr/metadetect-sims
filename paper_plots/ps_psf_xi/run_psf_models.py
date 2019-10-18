@@ -4,6 +4,8 @@ import treecorr
 import joblib
 import pandas as pd
 
+import ngmix
+from ngmix.admom import run_admom
 from mdetsims import PowerSpectrumPSF
 
 
@@ -20,14 +22,26 @@ def _get_psf_variation(func, n):
         retvals = []
         for i, y in enumerate(np.linspace(start, end, n)):
             _psf = func(x, y)
-            _psf = _psf.drawImage(scale=0.25, nx=17, ny=17)
-            mom = galsim.hsm.FindAdaptiveMom(
-                _psf,
-                precision=1e-4,
-                hsmparams=galsim.hsm.HSMParams(max_mom2_iter=1000))
+            _psf = _psf.drawImage(scale=0.125, nx=35, ny=35)
+            cen = (35 - 1)//2
+            obs = ngmix.Observation(
+                image=_psf.array,
+                jacobian=ngmix.DiagonalJacobian(scale=0.125, row=cen, col=cen))
+            try:
+                am = run_admom(obs, 1)
+                gm = am.get_gmix()
+                g1, g2, sigma = gm.get_g1g2sigma()
+                fwhm = sigma * 2.355
+            except Exception as e:
+                raise e
+                # fwhm = _psf.calculateFWHM()
+                # g1, g2 = 0, 0
+                # mom = galsim.hsm.FindAdaptiveMom(
+                #     _psf,
+                #     precision=1e-4,
+                #     hsmparams=galsim.hsm.HSMParams(max_mom2_iter=1000))
             retvals.append((
-                i, j, mom.moments_sigma * 0.25 * 2.355,
-                mom.observed_shape.g1, mom.observed_shape.g2))
+                i, j, fwhm, g1, g2))
         return retvals
 
     for j, x in enumerate(np.linspace(start, end, n)):
