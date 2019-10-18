@@ -21,7 +21,10 @@ def _get_psf_variation(func, n):
         for i, y in enumerate(np.linspace(start, end, n)):
             _psf = func(x, y)
             _psf = _psf.drawImage(scale=0.25, nx=17, ny=17)
-            mom = galsim.hsm.FindAdaptiveMom(_psf)
+            mom = galsim.hsm.FindAdaptiveMom(
+                _psf,
+                precision=1e-4,
+                hsmparams=galsim.hsm.HSMParams(max_mom2_iter=1000))
             retvals.append((
                 i, j, mom.moments_sigma * 0.25 * 2.355,
                 mom.observed_shape.g1, mom.observed_shape.g2))
