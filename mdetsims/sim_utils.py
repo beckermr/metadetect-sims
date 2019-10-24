@@ -15,6 +15,7 @@ from .masking import generate_bad_columns, generate_cosmic_rays
 from .interp import interpolate_image_and_noise
 from .cs_interp import interpolate_image_and_noise_cs
 from .symmetrize import symmetrize_bad_mask
+from .defaults import WLDEBLEND_DES_FACTOR, WLDEBLEND_LSST_FACTOR
 
 LOGGER = logging.getLogger(__name__)
 
@@ -107,6 +108,10 @@ class Sim(object):
             'cs-fourier' : a Fourier basis compressed sensing interpolant
 
         The default is 'cubic'.
+    ngal_factor : float, optional
+        A factor to change the number density in the sims. It is set to 0.6
+        automatically when using the wldeblend galaxy type for DES and 0.45
+        when using this type for LSST.
 
     Methods
     -------
@@ -157,7 +162,8 @@ class Sim(object):
             add_bad_columns=True,
             add_cosmic_rays=True,
             bad_columns_kws=None,
-            interpolation_type='cubic'):
+            interpolation_type='cubic',
+            ngal_factor=None):
         self.rng = rng
         self.noise_rng = np.random.RandomState(seed=rng.randint(1, 2**32-1))
         self.gal_type = gal_type
@@ -169,6 +175,7 @@ class Sim(object):
         self.shear_scene = shear_scene
         self.dim = dim
         self.buff = buff
+        self.ngal_factor = ngal_factor
         # assumed to be one band unless otherwise specified via the
         # galaxy type
         self.noise = [noise / np.sqrt(self.n_coadd)] * n_bands
@@ -208,8 +215,12 @@ class Sim(object):
 
         # given the input number of objects to simulate per square arcminute,
         # compute the number we actually need
+        if self.ngal_factor is None:
+            self.ngal_factor = 1
+        LOGGER.info('ngal adjustment factor: %f', self.ngal_factor)
+
         self.nobj = int(
-            self.ngal *
+            self.ngal * self.ngal_factor *
             (self.dim * self.scale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
@@ -310,6 +321,16 @@ class Sim(object):
         # base source density `ngal`. This is in units of number per
         # square arcminute.
         self.ngal = self._wldeblend_cat.size / (60 * 60)
+
+        # we use a factor of 0.6 to make sure the depth matches that in
+        # the real data
+        if self.ngal_factor is None:
+            if survey_name == 'DES':
+                self.ngal_factor = WLDEBLEND_DES_FACTOR
+            elif survey_name == 'LSST':
+                self.ngal_factor = WLDEBLEND_LSST_FACTOR
+            else:
+                raise ValueError("Survey '%s' is not valid!" % survey_name)
 
         LOGGER.info('catalog density: %f per sqr arcmin', self.ngal)
 
