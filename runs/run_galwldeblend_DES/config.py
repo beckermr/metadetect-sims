@@ -9,3 +9,5 @@ CONFIG = {
         'survey_name': 'DES',
         'bands': ('r', 'i', 'z')},
 }
+
+N_PATCHES = 100_000_000
