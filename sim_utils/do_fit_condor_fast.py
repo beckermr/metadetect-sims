@@ -14,9 +14,9 @@ except ImportError:
 def _cut_nones_and_avg_data(data):
     nd = [d for d in data if d[0] is not None and d[1] is not None]
     if len(nd) == 0:
-        return None
+        return None, 0
     else:
-        return np.mean(np.array(nd), axis=0).tolist()
+        return np.mean(np.array(nd), axis=0).tolist(), len(nd)
 
 
 def _func(fname):
@@ -47,11 +47,13 @@ outputs = joblib.Parallel(
     max_nbytes=None)(io)
 
 for i, s2n in enumerate([10, 15, 20]):
-    _outputs = [o[i] for o in outputs if o[i] is not None]
+    _outputs = [o[i][0] for o in outputs if o[i][0] is not None]
+    _wgts = [o[i][1] for o in outputs if o[i][0] is not None]
     pres, mres = zip(*_outputs)
 
     pres, mres = cut_nones(pres, mres)
-    m, msd, c, csd = estimate_m_and_c(pres, mres, 0.02, swap12=SWAP12)
+    m, msd, c, csd = estimate_m_and_c(
+        pres, mres, 0.02, swap12=SWAP12, weights=_wgts)
 
     if np.abs(m) < 1e-2:
         mfac = 1e-3

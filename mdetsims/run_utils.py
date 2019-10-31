@@ -36,7 +36,8 @@ def cut_nones(presults, mresults):
     return prr_keep, mrr_keep
 
 
-def estimate_m_and_c(presults, mresults, g_true, swap12=False, step=0.01):
+def estimate_m_and_c(
+        presults, mresults, g_true, swap12=False, step=0.01, weights=None):
     """Estimate m and c from paired lensing simulations.
 
     Parameters
@@ -57,6 +58,8 @@ def estimate_m_and_c(presults, mresults, g_true, swap12=False, step=0.01):
     step : float, optional
         The step used in metadetect for estimating the response. Default is
         0.01.
+    weights : list of weights, optional
+        Weights to apply to each sample. Will be normalized if not already.
 
     Returns
     -------
@@ -91,6 +94,12 @@ def estimate_m_and_c(presults, mresults, g_true, swap12=False, step=0.01):
     g1p, R11p, g2p, R22p = _get_stuff(prr_keep)
     g1m, R11m, g2m, R22m = _get_stuff(mrr_keep)
 
+    if weights is not None:
+        wgts = np.array(weights)
+    else:
+        wgts = np.ones(len(g1p))
+    wgts /= np.sum(wgts)
+
     msk = (
         np.isfinite(g1p) &
         np.isfinite(R11p) &
@@ -108,6 +117,7 @@ def estimate_m_and_c(presults, mresults, g_true, swap12=False, step=0.01):
     R22p = R22p[msk]
     g2m = g2m[msk]
     R22m = R22m[msk]
+    wgts = wgts[msk]
 
     x1 = (R11p + R11m)/2
     y1 = (g1p - g1m) / 2
@@ -120,12 +130,14 @@ def estimate_m_and_c(presults, mresults, g_true, swap12=False, step=0.01):
     cvals = []
     for _ in tqdm.trange(500, leave=False):
         ind = rng.choice(len(y1), replace=True, size=len(y1))
-        mvals.append(np.mean(y1[ind]) / np.mean(x1[ind]) - 1)
-        cvals.append(np.mean(y2[ind]) / np.mean(x2[ind]))
+        _wgts = wgts[ind].copy()
+        _wgts /= np.sum(_wgts)
+        mvals.append(np.mean(y1[ind] * _wgts) / np.mean(x1[ind] * _wgts) - 1)
+        cvals.append(np.mean(y2[ind] * _wgts) / np.mean(x2[ind] * _wgts))
 
     return (
-        np.mean(y1) / np.mean(x1) - 1, np.std(mvals),
-        np.mean(y2) / np.mean(x2), np.std(cvals))
+        np.mean(y1 * wgts) / np.mean(x1 * wgts) - 1, np.std(mvals),
+        np.mean(y2 * wgts) / np.mean(x2 * wgts), np.std(cvals))
 
 
 def measure_shear_metadetect(res, *, s2n_cut, t_ratio_cut, cut_interp):
