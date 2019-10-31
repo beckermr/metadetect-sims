@@ -74,7 +74,7 @@ for i, s2n in enumerate([10, 15, 20]):
     # of sims: {n_sims}
     m {mstr:s}: {m:f} +/- {msd:f}
     c {cstr:s}: {c:f} +/- {csd:f}""".format(
-        n_sims=len(pres) * np.sum(_wgts),
+        n_sims=np.sum(_wgts),
         mstr=mstr,
         m=m/mfac,
         msd=msd/mfac,
