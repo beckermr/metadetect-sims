@@ -95,9 +95,9 @@ def estimate_m_and_c(
     g1m, R11m, g2m, R22m = _get_stuff(mrr_keep)
 
     if weights is not None:
-        wgts = np.array(weights)
+        wgts = np.array(weights).astype(np.float64)
     else:
-        wgts = np.ones(len(g1p))
+        wgts = np.ones(len(g1p)).astype(np.float64)
     wgts /= np.sum(wgts)
 
     msk = (
