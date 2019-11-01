@@ -10,3 +10,5 @@ CONFIG = {
         'bands': ('r', 'i', 'z')},
     'ngal_factor': 1,
 }
+
+N_PATCHES = 100_000_000
