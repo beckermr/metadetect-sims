@@ -4,7 +4,7 @@ CONFIG = {
     'shear_scene': False,
     'n_coadd': 30,
     'scale': 0.263,
-    'pff_kws': {'fwhm': 1.1},
+    'psf_kws': {'fwhm': 1.1},
     'ngal': 45.0
 }
 
