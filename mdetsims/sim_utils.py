@@ -740,7 +740,7 @@ class Sim(object):
         if self.psf_type == 'gauss':
             kws = self.psf_kws or {}
             fwhm = kws.get('fwhm', 0.9)
-            LOGGER.debug('gaussian PSF FWHM is ', fwhm)
+            LOGGER.debug('gaussian PSF FWHM is %f', fwhm)
             psf = galsim.Gaussian(fwhm=fwhm)
             psf_dim = self._get_psf_box_size([psf], _psf_wcs)
             psf_im = psf.drawImage(
