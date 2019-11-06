@@ -13,7 +13,9 @@ else
     mkdir -p $tmpdir
 fi
 
-conda activate bnl
+source activate bnl
+
+echo `which python`
 
 # change to correct dir just to be sure
 cd $3/..

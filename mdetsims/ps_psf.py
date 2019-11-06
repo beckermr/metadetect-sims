@@ -41,7 +41,7 @@ class PowerSpectrumPSF(object):
     """
     def __init__(self, *,
                  rng, im_width, buff, scale, trunc=1,
-                 noise_level=None, variation_factor=5,
+                 noise_level=None, variation_factor=10,
                  median_seeing=0.8):
         self._rng = rng
         self._im_cen = (im_width - 1)/2

@@ -5,7 +5,6 @@ import joblib
 
 import numpy as np
 
-from mdetsims import Sim
 from mdetsims.metacal import (
     MetacalPlusMOF,
     MetacalTrueDetect,
@@ -19,7 +18,7 @@ from run_preamble import get_shear_meas_config
 
 (SWAP12, CUT_INTERP, DO_METACAL_MOF, DO_METACAL_SEP,
  DO_METACAL_TRUEDETECT,
- SHEAR_MEAS_CONFIG) = get_shear_meas_config()
+ SHEAR_MEAS_CONFIG, SIM_CLASS) = get_shear_meas_config()
 
 # code to do computation
 if DO_METACAL_MOF or DO_METACAL_TRUEDETECT or DO_METACAL_SEP:
@@ -60,7 +59,7 @@ def _run_sim(seed):
         else:
             assert CONFIG['g1'] == 0.02
             assert CONFIG['g2'] == 0.0
-        sim = Sim(rng=rng, **CONFIG)
+        sim = SIM_CLASS(rng=rng, **CONFIG)
 
         if DO_METACAL_MOF:
             mbobs = sim.get_mbobs()
@@ -90,7 +89,7 @@ def _run_sim(seed):
         else:
             assert CONFIG['g1'] == -0.02
             assert CONFIG['g2'] == 0.0
-        sim = Sim(rng=rng, **CONFIG)
+        sim = SIM_CLASS(rng=rng, **CONFIG)
 
         if DO_METACAL_MOF:
             mbobs = sim.get_mbobs()

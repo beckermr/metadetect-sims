@@ -5,6 +5,7 @@ from mdetsims import (
     TEST_METACAL_TRUEDETECT_GAUSS_CONFIG,
     TEST_METACAL_SEP_CONFIG,
     TEST_METACAL_SEP_GAUSS_CONFIG)
+from mdetsims import End2EndSim, Sim
 
 
 def get_shear_meas_config():
@@ -67,7 +68,17 @@ def get_shear_meas_config():
     except ImportError:
         pass
 
+    try:
+        from config import DO_END2END_SIM
+    except ImportError:
+        DO_END2END_SIM = False
+
+    if DO_END2END_SIM:
+        SIM_CLASS = End2EndSim
+    else:
+        SIM_CLASS = Sim
+
     return (
         SWAP12, CUT_INTERP, DO_METACAL_MOF, DO_METACAL_SEP,
         DO_METACAL_TRUEDETECT,
-        SHEAR_MEAS_CONFIG)
+        SHEAR_MEAS_CONFIG, SIM_CLASS)

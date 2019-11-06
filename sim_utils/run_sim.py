@@ -6,7 +6,6 @@ import logging
 import time
 import fitsio
 
-from mdetsims import Sim
 from mdetsims.metacal import (
     MetacalPlusMOF,
     MetacalTrueDetect,
@@ -22,7 +21,7 @@ from run_preamble import get_shear_meas_config
 
 (SWAP12, CUT_INTERP, DO_METACAL_MOF, DO_METACAL_SEP,
  DO_METACAL_TRUEDETECT,
- SHEAR_MEAS_CONFIG) = get_shear_meas_config()
+ SHEAR_MEAS_CONFIG, SIM_CLASS) = get_shear_meas_config()
 
 # process CLI arguments
 n_sims = int(sys.argv[1])
@@ -42,11 +41,14 @@ START = time.time()
 
 # deal with MPI
 try:
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    n_ranks = comm.Get_size()
-    HAVE_MPI = True
+    if n_sims > 1:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        n_ranks = comm.Get_size()
+        HAVE_MPI = True
+    else:
+        raise Exception()  # punt to the except clause
 except Exception:
     n_ranks = 1
     rank = 0
@@ -98,7 +100,7 @@ def _run_sim(seed):
         else:
             assert CONFIG['g1'] == 0.02
             assert CONFIG['g2'] == 0.0
-        sim = Sim(rng=rng, **CONFIG)
+        sim = SIM_CLASS(rng=rng, **CONFIG)
 
         if DO_METACAL_MOF:
             mbobs = sim.get_mbobs()
@@ -131,7 +133,7 @@ def _run_sim(seed):
         else:
             assert CONFIG['g1'] == -0.02
             assert CONFIG['g2'] == 0.0
-        sim = Sim(rng=rng, **CONFIG)
+        sim = SIM_CLASS(rng=rng, **CONFIG)
 
         if DO_METACAL_MOF:
             mbobs = sim.get_mbobs()
@@ -182,13 +184,16 @@ if rank == 0:
     print("n_ranks:", n_ranks, flush=True)
     print("n_workers:", n_workers, flush=True)
 
-if not USE_MPI:
-    pool = schwimmbad.JoblibPool(
-        n_workers, backend='multiprocessing', verbose=100)
+if n_workers == 1:
+    outputs = [_run_sim(0)]
 else:
-    pool = schwimmbad.choose_pool(mpi=USE_MPI, processes=n_workers)
-outputs = pool.map(_run_sim, range(n_sims))
-pool.close()
+    if not USE_MPI:
+        pool = schwimmbad.JoblibPool(
+            n_workers, backend='multiprocessing', verbose=100)
+    else:
+        pool = schwimmbad.choose_pool(mpi=USE_MPI, processes=n_workers)
+    outputs = pool.map(_run_sim, range(n_sims))
+    pool.close()
 
 pres, mres = zip(*outputs)
 pres, mres = cut_nones(pres, mres)
