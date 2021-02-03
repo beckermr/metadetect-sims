@@ -30,8 +30,12 @@ class Sim(object):
 
     Parameters
     ----------
+    fraction : float, 0 to 1
+        The fraction of galxies with g1/g2 shear.
     rng : np.random.RandomState
         An RNG to use for drawing the objects.
+    sel : np.random.RandomState
+    	An independent RNG to use for determining the shear of objects.
     gal_type : str
         The kind of galaxy to simulate.
     psf_type : str
@@ -52,6 +56,10 @@ class Sim(object):
         The simulated shear for the 1-axis.
     g2 : float, optional
         The simulated shear for the 2-axis.
+    g1ex : float, optional
+        The simulated shear for the 1-axis to another group of galaxies.
+    g2ex : float, optional
+        The simulated shear for the 2-axis to another group of galaxies.
     dim : int, optional
         The total dimension of the image.
     buff : int, optional
@@ -143,13 +151,14 @@ class Sim(object):
     """
     def __init__(
             self, *,
-            rng, gal_type, psf_type,
-            scale,
+            fraction=1,rng,sel,
+            gal_type, psf_type,scale,
             shear_scene=True,
             n_coadd=1,
             n_coadd_psf=None,
             n_coadd_msk=1,
             g1=0.02, g2=0.0,
+            g1ex=0.02,g2ex=0.0,
             dim=225, buff=25,
             noise=180,
             ngal=45.0,
@@ -165,6 +174,12 @@ class Sim(object):
             interpolation_type='cubic',
             ngal_factor=None):
         self.rng = rng
+        self.sel = sel
+        self.fraction = fraction
+        if self.fraction == 1:
+        	self.flag=False
+        else:
+        	self.flag=True
         self.noise_rng = np.random.RandomState(seed=rng.randint(1, 2**32-1))
         self.gal_type = gal_type
         self.psf_type = psf_type
@@ -172,6 +187,8 @@ class Sim(object):
         self.n_coadd_msk = n_coadd_msk
         self.g1 = g1
         self.g2 = g2
+        self.g1ex = g1ex
+        self.g2ex = g2ex
         self.shear_scene = shear_scene
         self.dim = dim
         self.buff = buff
@@ -224,6 +241,7 @@ class Sim(object):
             (self.dim * self.scale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
+        self.shear_mat_ex = galsim.Shear(g1=self.g1ex, g2=self.g2ex).getMatrix()
 
         if self.gal_grid is not None:
             self.nobj = self.gal_grid * self.gal_grid
@@ -334,7 +352,7 @@ class Sim(object):
 
         LOGGER.info('catalog density: %f per sqr arcmin', self.ngal)
 
-    def get_mbobs(self, return_truth_cat=False):
+    def get_mbobs(self, return_truth_cat=True):
         """Make a simulated MultiBandObsList for metadetect.
 
         Parameters
@@ -529,7 +547,7 @@ class Sim(object):
         if self.gal_grid is not None:
             return self.nobj
         else:
-            return self.rng.poisson(self.nobj)
+        	return self.rng.poisson(self.nobj)
 
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
@@ -589,6 +607,9 @@ class Sim(object):
         positions = []
 
         nobj = self._get_nobj()
+        # turn on/off varying shear
+        if self.flag:
+            shear_red = self.sel.choice(2,nobj,p=[1-self.fraction,self.fraction])
 
         if self.gal_grid is not None:
             self._gal_grid_ind = 0
@@ -623,7 +644,13 @@ class Sim(object):
 
             # compute the final image position
             if self.shear_scene:
-                sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
+                if self.flag:
+                    if shear_red[i] == 1:
+                        sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
+                    else:
+                        sdx, sdy = np.dot(self.shear_mat_ex, np.array([dx, dy]))
+                else:
+                    sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
             else:
                 sdx = dx
                 sdy = dy
@@ -639,7 +666,13 @@ class Sim(object):
             # shear, shift, and then convolve the galaxy
             _obj = []
             for gal, _psf in zip(gals, _psfs):
-                gal = gal.shear(g1=self.g1, g2=self.g2)
+                if self.flag:
+                    if shear_red[i] == 1:
+                        gal = gal.shear(g1=self.g1, g2=self.g2)
+                    else:
+                        gal = gal.shear(g1=self.g1ex, g2=self.g2ex) 
+                else:
+                    gal = gal.shear(g1=self.g1, g2=self.g2)
                 gal = galsim.Convolve(gal, _psf)
                 _obj.append(gal)
 
