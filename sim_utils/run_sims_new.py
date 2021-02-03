@@ -89,12 +89,16 @@ def _run_sim(seed):
         if SWAP12:
             assert CONFIG['g1'] == 0.0
             assert CONFIG['g2'] == 0.02
+            assert CONFIG['g1ex'] == 0.0
+            assert CONFIG['g2ex'] == 0.02
         else:
             assert CONFIG['g1'] == 0.02
             assert CONFIG['g2'] == 0.0
+            assert CONFIG['g1ex'] == 0.02
+            assert CONFIG['g2ex'] == 0.0
         sim = SIM_CLASS(rng=rng,sel=sel,flag=True,fraction=0.55,**CONFIG)
 
-        mbobs = sim.get_mbobs()
+        mbobs,_ = sim.get_mbobs()
         md = Metadetect(config, mbobs, rng)
         md.go()
         pres = _meas_shear(md.result)
@@ -109,12 +113,16 @@ def _run_sim(seed):
         if SWAP12:
             assert CONFIG['g1'] == 0.0
             assert CONFIG['g2'] == -0.02
+            assert CONFIG['g1ex'] == 0.0
+            assert CONFIG['g2ex'] == -0.02
         else:
             assert CONFIG['g1'] == -0.02
             assert CONFIG['g2'] == 0.0
+            assert CONFIG['g1ex'] == -0.02
+            assert CONFIG['g2ex'] == 0.0
         sim = SIM_CLASS(rng=rng,sel=sel,flag=True,fraction=0.55,**CONFIG)
 
-        mbobs = sim.get_mbobs()
+        mbobs,_ = sim.get_mbobs()
         md = Metadetect(config, mbobs, rng)
         md.go()
         mres = _meas_shear(md.result)
