@@ -73,6 +73,9 @@ jobs:
           command: |
             export PATH=`pwd`/miniconda/bin:$PATH
             source activate test-env
+            if [[ `grep "$(printf '\t')" pyccl/*.py` != "" ]]; then
+              exit 1
+            fi            
             flake8 --exclude=mdetsims/dbsim/erins_code/* mdetsims
 
       - run:
