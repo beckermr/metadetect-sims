@@ -1,5 +1,5 @@
 # metadetect-sims
-[[![tests](https://github.com/beckermr/metadetect-sims/actions/workflows/test.yml/badge.svg)](https://github.com/beckermr/metadetect-sims/actions/workflows/test.yml)](https://github.com/beckermr/metadetect-sims/actions/workflows/test.yml)
+[![tests](https://github.com/beckermr/metadetect-sims/actions/workflows/test.yml/badge.svg)](https://github.com/beckermr/metadetect-sims/actions/workflows/test.yml)
 
 simulations for the metadetect paper
 
