@@ -30,12 +30,12 @@ class Sim(object):
 
     Parameters
     ----------
-    fraction : float, 0 to 1
-        The fraction of galxies with g1/g2 shear.
+    frac_ex : float, 0 to 1
+        The fraction of galxies with extra shear.
     rng : np.random.RandomState
         An RNG to use for drawing the objects.
     sel : np.random.RandomState
-    	An independent RNG to use for determining the shear of objects.
+        An independent RNG to use for determining the shear of objects.
     gal_type : str
         The kind of galaxy to simulate.
     psf_type : str
@@ -151,14 +151,14 @@ class Sim(object):
     """
     def __init__(
             self, *,
-            fraction=1,rng,sel,
-            gal_type, psf_type,scale,
+            frac_ex=0, rng, sel,
+            gal_type, psf_type, scale,
             shear_scene=True,
             n_coadd=1,
             n_coadd_psf=None,
             n_coadd_msk=1,
             g1=0.02, g2=0.0,
-            g1ex=0.02,g2ex=0.0,
+            g1ex=0.02, g2ex=0.0,
             dim=225, buff=25,
             noise=180,
             ngal=45.0,
@@ -175,11 +175,11 @@ class Sim(object):
             ngal_factor=None):
         self.rng = rng
         self.sel = sel
-        self.fraction = fraction
-        if self.fraction == 1:
-        	self.flag=False
+        self.frac_ex = frac_ex
+        if self.frac_ex == 0:
+            self.flag_ex = False
         else:
-        	self.flag=True
+            self.flag_ex = True
         self.noise_rng = np.random.RandomState(seed=rng.randint(1, 2**32-1))
         self.gal_type = gal_type
         self.psf_type = psf_type
@@ -241,7 +241,7 @@ class Sim(object):
             (self.dim * self.scale / 60 * frac)**2)
 
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
-        self.shear_mat_ex = galsim.Shear(g1=self.g1ex, g2=self.g2ex).getMatrix()
+        self.shear_matex = galsim.Shear(g1=self.g1ex, g2=self.g2ex).getMatrix()
 
         if self.gal_grid is not None:
             self.nobj = self.gal_grid * self.gal_grid
@@ -352,7 +352,7 @@ class Sim(object):
 
         LOGGER.info('catalog density: %f per sqr arcmin', self.ngal)
 
-    def get_mbobs(self, return_truth_cat=True):
+    def get_mbobs(self, return_truth_cat=False):
         """Make a simulated MultiBandObsList for metadetect.
 
         Parameters
@@ -364,7 +364,7 @@ class Sim(object):
         -------
         mbobs : MultiBandObsList
         """
-        all_band_obj, positions = self._get_band_objects()
+        all_band_obj, positions, shear_red = self._get_band_objects()
 
         _, _, _, _, method = self._render_psf_image(
             x=self.im_cen, y=self.im_cen)
@@ -450,7 +450,7 @@ class Sim(object):
             mbobs.append(obslist)
 
         if return_truth_cat:
-            return mbobs, truth_cat
+            return mbobs, truth_cat, shear_red
         else:
             return mbobs
 
@@ -547,7 +547,7 @@ class Sim(object):
         if self.gal_grid is not None:
             return self.nobj
         else:
-        	return self.rng.poisson(self.nobj)
+            return self.rng.poisson(self.nobj)
 
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
@@ -607,9 +607,9 @@ class Sim(object):
         positions = []
 
         nobj = self._get_nobj()
+
         # turn on/off varying shear
-        if self.flag:
-            shear_red = self.sel.choice(2,nobj,p=[1-self.fraction,self.fraction])
+        shear_red = self.sel.choice(2, nobj, p=[self.frac_ex, 1-self.frac_ex])
 
         if self.gal_grid is not None:
             self._gal_grid_ind = 0
@@ -644,11 +644,11 @@ class Sim(object):
 
             # compute the final image position
             if self.shear_scene:
-                if self.flag:
+                if self.flag_ex:
                     if shear_red[i] == 1:
                         sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
                     else:
-                        sdx, sdy = np.dot(self.shear_mat_ex, np.array([dx, dy]))
+                        sdx, sdy = np.dot(self.shear_matex, np.array([dx, dy]))
                 else:
                     sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
             else:
@@ -666,11 +666,11 @@ class Sim(object):
             # shear, shift, and then convolve the galaxy
             _obj = []
             for gal, _psf in zip(gals, _psfs):
-                if self.flag:
+                if self.flag_ex:
                     if shear_red[i] == 1:
                         gal = gal.shear(g1=self.g1, g2=self.g2)
                     else:
-                        gal = gal.shear(g1=self.g1ex, g2=self.g2ex) 
+                        gal = gal.shear(g1=self.g1ex, g2=self.g2ex)
                 else:
                     gal = gal.shear(g1=self.g1, g2=self.g2)
                 gal = galsim.Convolve(gal, _psf)
@@ -679,7 +679,7 @@ class Sim(object):
             all_band_obj.append(_obj)
             positions.append(pos)
 
-        return all_band_obj, positions
+        return all_band_obj, positions, shear_red
 
     def _get_psf_box_size(self, psfs, _psf_wcs):
         if not hasattr(self, '_cached_psf_box_size'):
