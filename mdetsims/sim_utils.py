@@ -303,7 +303,6 @@ class Sim(object):
                 _svy = descwl.survey.Survey(**pars)
 
             self._surveys.append(_svy)
-            self._surveys.append(descwl.survey.Survey(**pars))
             self._builders.append(descwl.model.GalaxyBuilder(
                 survey=self._surveys[iband],
                 no_disk=False,
