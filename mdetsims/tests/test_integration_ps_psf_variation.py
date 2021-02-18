@@ -100,13 +100,13 @@ def test_integration_ps_psf_variation_stamps_var(
     fwhms, g1, g2 = zip(*data)
 
     if should_vary:
-        assert np.std(fwhms)/np.mean(fwhms) > 0.02
-        assert np.max(g1) - np.min(g1) > 0.02
-        assert np.max(g2) - np.min(g2) > 0.02
+        assert np.std(fwhms)/np.mean(fwhms) > 0.03
+        assert np.max(g1) - np.min(g1) > 0.03
+        assert np.max(g2) - np.min(g2) > 0.03
     else:
-        assert np.std(fwhms)/np.mean(fwhms) < 0.02
-        assert np.max(g1) - np.min(g1) < 0.02
-        assert np.max(g2) - np.min(g2) < 0.02
+        assert np.std(fwhms)/np.mean(fwhms) < 0.03
+        assert np.max(g1) - np.min(g1) < 0.03
+        assert np.max(g2) - np.min(g2) < 0.03
 
     print(
         np.std(fwhms)/np.mean(fwhms),
