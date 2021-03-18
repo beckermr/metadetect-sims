@@ -1,5 +1,5 @@
-# Results
-m (multiplicative bias), c (additive bias) and 1-sigma standard error for m and c.
+# Results:
+### m (multiplicative bias), c (additive bias) and 1-sigma standard error for m and c.
 
 ## run_mdet_no_matching_no_grid
 
