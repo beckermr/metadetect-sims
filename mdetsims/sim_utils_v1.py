@@ -649,18 +649,10 @@ class Sim(object):
                 gals, rind = self._get_gal_wldeblend()
 
                 # add shear info to calculate the final position
-                if 0. < self.OneSq_cat[rind] < 0.2:
-                    z_population[i] = 0
-                elif 0.2 < self.OneSq_cat[rind] < 0.4:
+                if 0.2 < self.OneSq_cat[rind] < 0.4:
                     z_population[i] = 1
-                elif 0.4 < self.OneSq_cat[rind] < 0.6:
-                    z_population[i] = 2
-                elif 0.6 < self.OneSq_cat[rind] < 0.8:
-                    z_population[i] = 3
-                elif 0.8 < self.OneSq_cat[rind] < 1.0:
-                    z_population[i] = 4
                 else:
-                    z_population[i] = -1
+                    z_population[i] = 0
             else:
                 raise ValueError('gal_type "%s" not valid!' % self.gal_type)
 

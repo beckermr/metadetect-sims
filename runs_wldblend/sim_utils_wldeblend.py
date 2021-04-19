@@ -32,6 +32,8 @@ class Sim(object):
     ----------
     OneSq_cat: fits file or None
         The whole redshift info for OneSq_cat
+    shear_population: int, 0 to 4
+        Select the shear population
     frac_ex : float, 0 to 1
         The fraction of galxies with extra shear.
     rng : np.random.RandomState
@@ -153,6 +155,7 @@ class Sim(object):
     """
     def __init__(
             self, *, OneSq_cat=None,
+            shear_population=None,
             frac_ex=0, rng, sel_rng,
             gal_type, psf_type, scale,
             shear_scene=True,
@@ -192,6 +195,7 @@ class Sim(object):
         self.g2 = g2
         self.g1ex = g1ex
         self.g2ex = g2ex
+        self.shear_population = shear_population
         self.shear_scene = shear_scene
         self.dim = dim
         self.buff = buff
@@ -667,7 +671,7 @@ class Sim(object):
             # compute the final image position
             if self.shear_scene:
                 if self.flag_ex:
-                    if z_population[i] == 1:
+                    if z_population[i] == self.shear_population:
                         sdx, sdy = np.dot(self.shear_mat, np.array([dx, dy]))
                     else:
                         sdx, sdy = np.dot(self.shear_matex, np.array([dx, dy]))
@@ -689,7 +693,7 @@ class Sim(object):
             _obj = []
             for gal, _psf in zip(gals, _psfs):
                 if self.flag_ex:
-                    if z_population[i] == 1:
+                    if z_population[i] == self.shear_population:
                         gal = gal.shear(g1=self.g1, g2=self.g2)
                     else:
                         gal = gal.shear(g1=self.g1ex, g2=self.g2ex)
