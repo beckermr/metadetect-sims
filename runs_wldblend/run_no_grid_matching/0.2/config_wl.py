@@ -6,7 +6,6 @@ CONFIG = {
     'n_coadd_psf': 1,
     'dim': 300,
     'scale': 0.2,
-    'gal_grid': 6,
     'g1': 0.02,
     'g2': 0.0,
     'g1ex': 0.02,
