@@ -1,0 +1,6 @@
+N: 1
+mode: bynode
+command: |
+  source ~/.bashrc
+  conda activate bnl
+  python do_fit_condor.py &> condor_shear_meas.txt

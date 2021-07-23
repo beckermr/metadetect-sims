@@ -65,6 +65,8 @@ class Sim(object):
     gal_grid : int or None
         If not `None`, galaxies are laid out on a grid of `gal_grid` x
         `gal_grid` dimensions in the central part of the image.
+    'gal_dist' : float
+        Distance in arcseconds between the generated object centers.
     psf_kws : dict or None, optional
         Extra keyword arguments to pass to the constructors for PSF objects.
         See the doc strings of the PSF objects `PowerSpectrumPSF` and `RealPSF`
@@ -86,7 +88,8 @@ class Sim(object):
 
             'min_dist' : float
                 Minimum distance in arcseconds between the generatd object
-                centers.
+                centers. (should no longer be in use)
+            
 
     homogenize_psf : bool, optional
         Apply PSF homogenization to the image.
@@ -155,6 +158,7 @@ class Sim(object):
             ngal=45.0,
             n_bands=1,
             gal_grid=None,
+            gal_dist=10, 
             psf_kws=None,
             gal_kws=None,
             homogenize_psf=False,
@@ -182,6 +186,7 @@ class Sim(object):
         self.ngal = ngal
         self.gal_grid = gal_grid
         self.im_cen = (dim - 1) / 2
+        self.gal_dist = gal_dist
         self.psf_kws = psf_kws
         self.gal_kws = gal_kws
         self.n_coadd_psf = n_coadd_psf or self.n_coadd
@@ -218,11 +223,10 @@ class Sim(object):
         if self.ngal_factor is None:
             self.ngal_factor = 1
         LOGGER.info('ngal adjustment factor: %f', self.ngal_factor)
-
-        self.nobj = int(
-            self.ngal * self.ngal_factor *
-            (self.dim * self.scale / 60 * frac)**2)
-
+       
+        self.nobj = self.ngal
+            # self.ngal * self.ngal_factor *
+            # (self.dim * self.scale / 60 * frac)**2)
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
 
         if self.gal_grid is not None:
@@ -249,7 +253,6 @@ class Sim(object):
         self._wldeblend_cat['pa_disk'] = self.rng.uniform(
             low=0.0, high=360.0, size=self._wldeblend_cat.size)
         self._wldeblend_cat['pa_bulge'] = self._wldeblend_cat['pa_disk']
-
         # set the survey name and exposure times
         if 'survey_name' not in gal_kws:
             survey_name = 'DES'
@@ -509,10 +512,9 @@ class Sim(object):
                 xind * dg + dg/2 - self.pos_width)
         else:
             while True:
-                dx, dy = self.rng.uniform(
-                    low=-self.pos_width,
-                    high=self.pos_width,
-                    size=2)
+                rot = self.rng.randint((2*np.pi), size=1)
+                dx = self.gal_dist*np.cos(rot) 
+                dy = self.gal_dist*np.sin(rot)
 
                 if others is not None:
                     tree = scipy.spatial.cKDTree(others)
@@ -528,8 +530,8 @@ class Sim(object):
         if self.gal_grid is not None:
             return self.nobj
         else:
-            return self.rng.poisson(self.nobj)
-
+            return self.nobj # self.rng.poisson(self.nobj)
+# poisson delete
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
         half_light_radius = 0.5
@@ -597,18 +599,26 @@ class Sim(object):
             LOGGER.debug('using min dist: %f', gal_kws['min_dist'])
             others = []
 
+        dx, dy = self._get_dxdy()
+
         for i in range(nobj):
             # unsheared offset from center of image
-            if 'min_dist' in gal_kws:
-                if i == 0:
-                    dx, dy = self._get_dxdy()
-                else:
-                    dx, dy = self._get_dxdy(
-                        others=np.array(others),
-                        min_dist=gal_kws['min_dist'])
-                others.append([dx, dy])
-            else:
-                dx, dy = self._get_dxdy()
+            #if 'min_dist' in gal_kws:
+            #    if i == 0:
+            #        dx, dy = self._get_dxdy()
+            #    else:
+            #         dx, dy = self._get_dxdy(
+            #             others=np.array(others),
+            #             min_dist=gal_kws['min_dist'])
+            #     others.append([dx, dy])
+            #     # above shouldn't happen since we aren't using min_dist here
+            # else:
+            if i != 0:
+                dx *= -1
+                dy *= -1
+            if i == 2:
+                dx = 0
+                dy = 0                
 
             # get the galaxy
             if self.gal_type == 'exp':
