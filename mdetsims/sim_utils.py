@@ -512,10 +512,10 @@ class Sim(object):
                 xind * dg + dg/2 - self.pos_width)
         else:
             while True:
-                rot = self.rng.randint((2*np.pi), size=1)
-                dx = self.gal_dist*np.cos(rot) 
-                dy = self.gal_dist*np.sin(rot)
-
+                rot = self.rng.uniform(np.pi, size=1)
+                dx = (0.5)*self.gal_dist*np.cos(rot) + (self.rng.uniform(-1,1,size=1)*.263)
+                dy = (0.5)*self.gal_dist*np.sin(rot) + (self.rng.uniform(-1,1,size=1)*.263)
+                
                 if others is not None:
                     tree = scipy.spatial.cKDTree(others)
                     d, _ = tree.query(np.array([dx, dy]))

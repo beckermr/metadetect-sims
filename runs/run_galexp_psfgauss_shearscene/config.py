@@ -5,7 +5,7 @@ CONFIG = {
     'shear_scene': True,
     'n_coadd': 30,
     'scale': 0.263,
-    'gal_dist': 5
     }
 
 DO_METACAL_SEP = True
+# 'gal_dist': 0.2
