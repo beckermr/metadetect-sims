@@ -1,10 +1,15 @@
 import sys
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 import numpy as np
 import schwimmbad
 import multiprocessing
 import logging
 import time
 import fitsio
+
+import csv
+from functools import partial
 
 from mdetsims.metacal import (
     MetacalPlusMOF,
@@ -85,8 +90,7 @@ def _add_shears(cfg, plus=True):
 
     cfg.update({'g1': g1, 'g2': g2})
 
-
-def _run_sim(seed):
+def _run_sim(seed, distance):
     config = {}
     config.update(SHEAR_MEAS_CONFIG)
 
@@ -100,7 +104,7 @@ def _run_sim(seed):
         else:
             assert CONFIG['g1'] == 0.02
             assert CONFIG['g2'] == 0.0
-        sim = SIM_CLASS(rng=rng, **CONFIG)
+        sim = SIM_CLASS(rng=rng, **CONFIG, gal_dist = distance)
 
         if DO_METACAL_MOF:
             mbobs = sim.get_mbobs()
@@ -133,7 +137,7 @@ def _run_sim(seed):
         else:
             assert CONFIG['g1'] == -0.02
             assert CONFIG['g2'] == 0.0
-        sim = SIM_CLASS(rng=rng, **CONFIG)
+        sim = SIM_CLASS(rng=rng, **CONFIG, gal_dist = distance)
 
         if DO_METACAL_MOF:
             mbobs = sim.get_mbobs()
@@ -156,8 +160,9 @@ def _run_sim(seed):
 
         dens = len(md.result['noshear']) / sim.area_sqr_arcmin
         LOGGER.info('found %f objects per square arcminute', dens)
-
+        
         retvals = (pres, mres)
+        
     except Exception as e:
         print(repr(e))
         retvals = (None, None)
@@ -168,53 +173,61 @@ def _run_sim(seed):
             flush=True)
     return retvals
 
+if __name__ == '__main__':
+    biases = []
+    distances = np.linspace(0,4,num=15)
+    for dist in distances:
+        if rank == 0:
+            if DO_METACAL_MOF:
+                print('running metacal+MOF', flush=True)
+            elif DO_METACAL_SEP:
+                print('running metacal+SEP', flush=True)
+            elif DO_METACAL_TRUEDETECT:
+                print('running metacal+true detection', flush=True)
+            else:
+                print('running metadetect', flush=True)
+            print('config:', CONFIG, flush=True)
+            print('swap 12:', SWAP12)
+            print('use mpi:', USE_MPI, flush=True)
+            print("n_ranks:", n_ranks, flush=True)
+            print("n_workers:", n_workers, flush=True)
 
-if rank == 0:
-    if DO_METACAL_MOF:
-        print('running metacal+MOF', flush=True)
-    elif DO_METACAL_SEP:
-        print('running metacal+SEP', flush=True)
-    elif DO_METACAL_TRUEDETECT:
-        print('running metacal+true detection', flush=True)
-    else:
-        print('running metadetect', flush=True)
-    print('config:', CONFIG, flush=True)
-    print('swap 12:', SWAP12)
-    print('use mpi:', USE_MPI, flush=True)
-    print("n_ranks:", n_ranks, flush=True)
-    print("n_workers:", n_workers, flush=True)
+        if n_workers == 1:
+            # can add loop here for dist in distances
+            outputs = [_run_sim(0, 4)]
+        else:
+            partial_sim = partial(_run_sim, distance = dist)
+            if not USE_MPI:
+                pool = schwimmbad.JoblibPool(
+                    n_workers, backend='multiprocessing', verbose=100)
+            else:
+                pool = schwimmbad.choose_pool(mpi=USE_MPI, processes=n_workers)
+            outputs = pool.map(partial_sim,range(n_sims))
+            pool.close()
 
-if n_workers == 1:
-    outputs = [_run_sim(0)]
-else:
-    if not USE_MPI:
-        pool = schwimmbad.JoblibPool(
-            n_workers, backend='multiprocessing', verbose=100)
-    else:
-        pool = schwimmbad.choose_pool(mpi=USE_MPI, processes=n_workers)
-    outputs = pool.map(_run_sim, range(n_sims))
-    pool.close()
+        pres, mres = zip(*outputs)
+        pres, mres = cut_nones(pres, mres)
 
-pres, mres = zip(*outputs)
-pres, mres = cut_nones(pres, mres)
+        if rank == 0:
+            dt = [('g1p', 'f8'), ('g1m', 'f8'), ('g1', 'f8'),
+                ('g2p', 'f8'), ('g2m', 'f8'), ('g2', 'f8')]
+            dplus = np.array(pres, dtype=dt)
+            dminus = np.array(mres, dtype=dt)
+            with fitsio.FITS('data.fits', 'rw') as fits:
+                fits.write(dplus, extname='plus')
+                fits.write(dminus, extname='minus')
 
-if rank == 0:
-    dt = [('g1p', 'f8'), ('g1m', 'f8'), ('g1', 'f8'),
-          ('g2p', 'f8'), ('g2m', 'f8'), ('g2', 'f8')]
-    dplus = np.array(pres, dtype=dt)
-    dminus = np.array(mres, dtype=dt)
-    with fitsio.FITS('data.fits', 'rw') as fits:
-        fits.write(dplus, extname='plus')
-        fits.write(dminus, extname='minus')
-
-    m, msd, c, csd = estimate_m_and_c(pres, mres, 0.02, swap12=SWAP12)
-
-    print("""\
+            m, msd, c, csd = estimate_m_and_c(pres, mres, 0.02, swap12=SWAP12)
+            
+            print("""\
 # of sims: {n_sims}
-noise cancel m   : {m:f} +/- {msd:f}
-noise cancel c   : {c:f} +/- {csd:f}""".format(
-        n_sims=len(pres),
-        m=m,
-        msd=msd,
-        c=c,
-        csd=csd), flush=True)
+        noise cancel m   : {m:f} +/- {msd:f}
+        noise cancel c   : {c:f} +/- {csd:f}""".format(
+                n_sims=len(pres),
+                m=m,
+                msd=msd,
+                c=c,
+                csd=csd), flush=True)
+            # put above numbers into list and export    
+        biases.append(m)
+    print(biases) 
