@@ -9,3 +9,4 @@ CONFIG = {
     }
 
 DO_METACAL_SEP = True
+METACAL_GAUSS_FIT = True
