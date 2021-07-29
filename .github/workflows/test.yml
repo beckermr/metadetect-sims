@@ -25,6 +25,7 @@ jobs:
         shell: bash -l {0}
         run: |
           conda config --set always_yes yes
+          conda update --all -y -q
           conda install -y -q \
             pip \
             nomkl \
@@ -41,7 +42,7 @@ jobs:
             meds \
             pylbfgs \
             lsstdesc-weaklensingdeblending
-          conda update --all -y -q
+
           pip install git+https://github.com/esheldon/metadetect.git \
             --force-reinstall --no-deps --no-cache-dir
           pip install git+https://github.com/esheldon/mof.git \
