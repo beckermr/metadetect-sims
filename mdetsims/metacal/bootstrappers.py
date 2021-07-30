@@ -149,7 +149,6 @@ class MaxMetacalBootstrapper(Bootstrapper, MetacalMixin):
             try:
                 # run a regular Bootstrapper on these observations
                 boot = Bootstrapper(obs_dict[key],
-                                    find_cen=self.find_cen,
                                     verbose=self.verbose)
 
                 boot.fit_psfs(psf_model, psf_Tguess, ntry=psf_ntry,

@@ -175,6 +175,7 @@ def _run_sim(seed, distance):
 
 if __name__ == '__main__':
     biases = []
+    bsd = []
     distances = np.linspace(0,4,num=15)
     for dist in distances:
         if rank == 0:
@@ -194,7 +195,7 @@ if __name__ == '__main__':
 
         if n_workers == 1:
             # can add loop here for dist in distances
-            outputs = [_run_sim(0, 4)]
+            outputs = [_run_sim(0)]
         else:
             partial_sim = partial(_run_sim, distance = dist)
             if not USE_MPI:
@@ -228,6 +229,7 @@ if __name__ == '__main__':
                 msd=msd,
                 c=c,
                 csd=csd), flush=True)
-            # put above numbers into list and export    
         biases.append(m)
-    print(biases) 
+        bsd.append(msd)
+    print(f'm at different gal_dist {biases}')
+    print(f'msd at different gal_dist {bsd}')
