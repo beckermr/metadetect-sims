@@ -21,7 +21,6 @@ from mdetsims.run_utils import (
     measure_shear_metacal_plus_mof)
 from metadetect.metadetect import Metadetect
 from config import CONFIG
-
 from run_preamble import get_shear_meas_config
 
 (SWAP12, CUT_INTERP, DO_METACAL_MOF, DO_METACAL_SEP,
@@ -176,7 +175,10 @@ def _run_sim(seed, distance):
 if __name__ == '__main__':
     biases = []
     bsd = []
-    distances = np.linspace(0,4,num=15)
+    if CONFIG['pair_sim'] is not None:
+        distances = np.linspace(1,3,num=10) 
+    else:
+        distances = [1] 
     for dist in distances:
         if rank == 0:
             if DO_METACAL_MOF:
@@ -231,5 +233,5 @@ if __name__ == '__main__':
                 csd=csd), flush=True)
         biases.append(m)
         bsd.append(msd)
-    print(f'm at different gal_dist {biases}')
-    print(f'msd at different gal_dist {bsd}')
+    print(f'm(s) for gal_dist(s) {biases}')
+    print(f'msd(s) for gal_dist(s) {bsd}')

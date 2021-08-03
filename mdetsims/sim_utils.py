@@ -88,8 +88,7 @@ class Sim(object):
 
             'min_dist' : float
                 Minimum distance in arcseconds between the generatd object
-                centers. (should no longer be in use)
-            
+                centers.             
 
     homogenize_psf : bool, optional
         Apply PSF homogenization to the image.
@@ -102,6 +101,9 @@ class Sim(object):
     add_cosmic_rays : bool, optional
         If False, do not add cosmic rays. Otherwise they will be added when
         `mask_and_interp` is True.
+    pair_sim : bool, optional
+        If not `None`, Sim will create two galaxies at a distance gal_dist apart,
+        centerd at the center, and with a random rotation.
     bad_columns_kws : dict, optional
         A set of keyword arguments to pass to the bad column generator.
     interpolation_type : str, optional
@@ -165,6 +167,7 @@ class Sim(object):
             mask_and_interp=False,
             add_bad_columns=True,
             add_cosmic_rays=True,
+            pair_sim=None,
             bad_columns_kws=None,
             interpolation_type='cubic',
             ngal_factor=None):
@@ -194,6 +197,7 @@ class Sim(object):
         self.mask_and_interp = mask_and_interp
         self.add_bad_columns = add_bad_columns
         self.add_cosmic_rays = add_cosmic_rays
+        self.pair_sim = pair_sim
         self.bad_columns_kws = bad_columns_kws or {}
         self.interpolation_type = interpolation_type
 
@@ -224,9 +228,10 @@ class Sim(object):
             self.ngal_factor = 1
         LOGGER.info('ngal adjustment factor: %f', self.ngal_factor)
        
-        self.nobj = self.ngal
-            # self.ngal * self.ngal_factor *
-            # (self.dim * self.scale / 60 * frac)**2)
+        self.nobj = int(
+            self.ngal * self.ngal_factor *
+            (self.dim * self.scale / 60 * frac)**2)
+
         self.shear_mat = galsim.Shear(g1=self.g1, g2=self.g2).getMatrix()
 
         if self.gal_grid is not None:
@@ -512,10 +517,15 @@ class Sim(object):
                 xind * dg + dg/2 - self.pos_width)
         else:
             while True:
-                rot = self.rng.uniform(np.pi, size=1)
-                dx = (0.5)*self.gal_dist*np.cos(rot) + (self.rng.uniform(-1,1,size=1)*.263)
-                dy = (0.5)*self.gal_dist*np.sin(rot) + (self.rng.uniform(-1,1,size=1)*.263)
-                
+                if self.pair_sim is not None:
+                     rot = self.rng.uniform(np.pi, size=1)
+                     dx = (0.5)*self.gal_dist*np.cos(rot) + (self.rng.uniform(-1,1,size=1)*.263)
+                     dy = (0.5)*self.gal_dist*np.sin(rot) + (self.rng.uniform(-1,1,size=1)*.263)
+                else:
+                    dx, dy = self.rng.uniform(
+                         low=-self.pos_width,
+                         high=self.pos_width,
+                         size=2)
                 if others is not None:
                     tree = scipy.spatial.cKDTree(others)
                     d, _ = tree.query(np.array([dx, dy]))
@@ -527,11 +537,12 @@ class Sim(object):
             return dx, dy
 
     def _get_nobj(self):
-        if self.gal_grid is not None:
+        if self.pair_sim is not None:
+            return self.nobj
+        elif self.gal_grid is not None:
             return self.nobj
         else:
-            return self.nobj # self.rng.poisson(self.nobj)
-# poisson delete
+            return self.rng.poisson(self.nobj)
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
         half_light_radius = 0.5
@@ -590,7 +601,6 @@ class Sim(object):
         positions = []
 
         nobj = self._get_nobj()
-
         if self.gal_grid is not None:
             self._gal_grid_ind = 0
 
@@ -602,25 +612,24 @@ class Sim(object):
         dx, dy = self._get_dxdy()
 
         for i in range(nobj):
-            # unsheared offset from center of image
-            #if 'min_dist' in gal_kws:
-            #    if i == 0:
-            #        dx, dy = self._get_dxdy()
-            #    else:
-            #         dx, dy = self._get_dxdy(
-            #             others=np.array(others),
-            #             min_dist=gal_kws['min_dist'])
-            #     others.append([dx, dy])
-            #     # above shouldn't happen since we aren't using min_dist here
-            # else:
-            if i != 0:
-                dx *= -1
-                dy *= -1
-            if i == 2:
-                dx = 0
-                dy = 0                
-
-            # get the galaxy
+            if self.pair_sim is not None: 
+                if i != 0:
+                    dx *= -1
+                    dy *= -1
+            else:
+                # unsheared offset from center of image
+                if 'min_dist' in gal_kws:
+                    if i == 0:
+                        dx, dy = self._get_dxdy()
+                    else:
+                         dx, dy = self._get_dxdy(
+                             others=np.array(others),
+                             min_dist=gal_kws['min_dist'])
+                    others.append([dx, dy])
+                else:
+                     dx, dy = self._get_dxdy()
+                # changed
+                # get the galaxy
             if self.gal_type == 'exp':
                 gals = self._get_gal_exp()
             elif self.gal_type == 'ground_galsim_parametric':
