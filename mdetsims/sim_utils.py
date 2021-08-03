@@ -517,7 +517,7 @@ class Sim(object):
                 xind * dg + dg/2 - self.pos_width)
         else:
             while True:
-                if self.pair_sim == True:
+                if self.pair_sim:
                      rot = self.rng.uniform(np.pi, size=1)
                      dx = (0.5)*self.gal_dist*np.cos(rot) + (self.rng.uniform(-1,1,size=1)*.263)
                      dy = (0.5)*self.gal_dist*np.sin(rot) + (self.rng.uniform(-1,1,size=1)*.263)
@@ -537,7 +537,7 @@ class Sim(object):
             return dx, dy
 
     def _get_nobj(self):
-        if self.pair_sim == True:
+        if self.pair_sim:
             return self.nobj
         elif self.gal_grid is not None:
             return self.nobj
@@ -612,7 +612,7 @@ class Sim(object):
         dx, dy = self._get_dxdy()
 
         for i in range(nobj):
-            if self.pair_sim == True: 
+            if self.pair_sim: 
                 if i != 0:
                     dx *= -1
                     dy *= -1
