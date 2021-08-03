@@ -102,8 +102,8 @@ class Sim(object):
         If False, do not add cosmic rays. Otherwise they will be added when
         `mask_and_interp` is True.
     pair_sim : bool, optional
-        If not `None`, Sim will create two galaxies at a distance gal_dist apart,
-        centerd at the center, and with a random rotation.
+        If True, Sim will create two galaxies at a distance gal_dist apart,
+        centered at the center of the image, and with a random rotation.
     bad_columns_kws : dict, optional
         A set of keyword arguments to pass to the bad column generator.
     interpolation_type : str, optional
@@ -167,7 +167,7 @@ class Sim(object):
             mask_and_interp=False,
             add_bad_columns=True,
             add_cosmic_rays=True,
-            pair_sim=None,
+            pair_sim=False,
             bad_columns_kws=None,
             interpolation_type='cubic',
             ngal_factor=None):
@@ -517,7 +517,7 @@ class Sim(object):
                 xind * dg + dg/2 - self.pos_width)
         else:
             while True:
-                if self.pair_sim is not None:
+                if self.pair_sim == True:
                      rot = self.rng.uniform(np.pi, size=1)
                      dx = (0.5)*self.gal_dist*np.cos(rot) + (self.rng.uniform(-1,1,size=1)*.263)
                      dy = (0.5)*self.gal_dist*np.sin(rot) + (self.rng.uniform(-1,1,size=1)*.263)
@@ -537,7 +537,7 @@ class Sim(object):
             return dx, dy
 
     def _get_nobj(self):
-        if self.pair_sim is not None:
+        if self.pair_sim == True:
             return self.nobj
         elif self.gal_grid is not None:
             return self.nobj
@@ -612,7 +612,7 @@ class Sim(object):
         dx, dy = self._get_dxdy()
 
         for i in range(nobj):
-            if self.pair_sim is not None: 
+            if self.pair_sim == True: 
                 if i != 0:
                     dx *= -1
                     dy *= -1
