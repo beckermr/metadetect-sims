@@ -175,6 +175,7 @@ def _run_sim(seed, distance):
 if __name__ == '__main__':
     biases = []
     bsd = []
+    distances = np.linspace(1,5,num=20)
     for dist in distances:
         if rank == 0:
             if DO_METACAL_MOF:
@@ -192,7 +193,6 @@ if __name__ == '__main__':
             print("n_workers:", n_workers, flush=True)
 
         if n_workers == 1:
-            # can add loop here for dist in distances
             outputs = [_run_sim(0)]
         else:
             partial_sim = partial(_run_sim, distance = dist)

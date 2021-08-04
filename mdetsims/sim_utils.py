@@ -52,6 +52,8 @@ class Sim(object):
         The simulated shear for the 1-axis.
     g2 : float, optional
         The simulated shear for the 2-axis.
+    half_light_radius: float, optional
+        The half light radius of the simulated objects.
     dim : int, optional
         The total dimension of the image.
     buff : int, optional
@@ -155,6 +157,7 @@ class Sim(object):
             n_coadd_psf=None,
             n_coadd_msk=1,
             g1=0.02, g2=0.0,
+            half_light_radius=0.5,
             dim=225, buff=25,
             noise=180,
             ngal=45.0,
@@ -179,6 +182,7 @@ class Sim(object):
         self.n_coadd_msk = n_coadd_msk
         self.g1 = g1
         self.g2 = g2
+        self.half_light_radius = half_light_radius
         self.shear_scene = shear_scene
         self.dim = dim
         self.buff = buff
@@ -545,7 +549,7 @@ class Sim(object):
             return self.rng.poisson(self.nobj)
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
-        half_light_radius = 0.5
+        half_light_radius = self.half_light_radius
 
         _gal = []
         for _ in range(self.n_bands):
