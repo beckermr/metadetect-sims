@@ -18,7 +18,8 @@ from mdetsims.metacal import (
 from mdetsims.run_utils import (
     estimate_m_and_c, cut_nones,
     measure_shear_metadetect,
-    measure_shear_metacal_plus_mof)
+    measure_shear_metacal_plus_mof,
+    obj_ratio)
 from metadetect.metadetect import Metadetect
 from config import CONFIG
 from run_preamble import get_shear_meas_config
@@ -27,6 +28,12 @@ from run_preamble import get_shear_meas_config
  DO_METACAL_TRUEDETECT,
  SHEAR_MEAS_CONFIG, SIM_CLASS) = get_shear_meas_config()
 
+biases = []
+bsd = []
+distances = np.linspace(1,5,num=2)
+numObj = []
+objDet = []
+ratios = []
 # process CLI arguments
 n_sims = int(sys.argv[1])
 
@@ -121,7 +128,9 @@ def _run_sim(seed, distance):
             mbobs = sim.get_mbobs()
             md = Metadetect(config, mbobs, rng)
             md.go()
-
+        
+        numObj.append(len(md.result['noshear']))
+        
         pres = _meas_shear(md.result)
 
         dens = len(md.result['noshear']) / sim.area_sqr_arcmin
@@ -157,14 +166,15 @@ def _run_sim(seed, distance):
 
         mres = _meas_shear(md.result)
 
+        numObj.append(len(md.result['noshear']))
+        f'TES TEST TET {numObj}'
         dens = len(md.result['noshear']) / sim.area_sqr_arcmin
         LOGGER.info('found %f objects per square arcminute', dens)
         
-        retvals = (pres, mres)
-        
+        retvals = (pres, mres, numObj)
     except Exception as e:
         print(repr(e))
-        retvals = (None, None)
+        retvals = (None, None, None)
 
     if USE_MPI and seed % 1000 == 0:
         print(
@@ -173,9 +183,6 @@ def _run_sim(seed, distance):
     return retvals
 
 if __name__ == '__main__':
-    biases = []
-    bsd = []
-    distances = np.linspace(1,5,num=20)
     for dist in distances:
         if rank == 0:
             if DO_METACAL_MOF:
@@ -193,7 +200,7 @@ if __name__ == '__main__':
             print("n_workers:", n_workers, flush=True)
 
         if n_workers == 1:
-            outputs = [_run_sim(0)]
+            outputs = [_run_sim(0, dist)]
         else:
             partial_sim = partial(_run_sim, distance = dist)
             if not USE_MPI:
@@ -203,10 +210,9 @@ if __name__ == '__main__':
                 pool = schwimmbad.choose_pool(mpi=USE_MPI, processes=n_workers)
             outputs = pool.map(partial_sim,range(n_sims))
             pool.close()
-
-        pres, mres = zip(*outputs)
+        pres, mres, nobs = zip(*outputs)
         pres, mres = cut_nones(pres, mres)
-
+        nobs, nobs = cut_nones(nobs, nobs)
         if rank == 0:
             dt = [('g1p', 'f8'), ('g1m', 'f8'), ('g1', 'f8'),
                 ('g2p', 'f8'), ('g2m', 'f8'), ('g2', 'f8')]
@@ -217,7 +223,9 @@ if __name__ == '__main__':
                 fits.write(dminus, extname='minus')
 
             m, msd, c, csd = estimate_m_and_c(pres, mres, 0.02, swap12=SWAP12)
-            
+
+            objDet.append(nobs)           
+            ratios.append(obj_ratio(nobs))
             print("""\
 # of sims: {n_sims}
         noise cancel m   : {m:f} +/- {msd:f}
@@ -229,5 +237,7 @@ if __name__ == '__main__':
                 csd=csd), flush=True)
         biases.append(m)
         bsd.append(msd)
-    print(f'm(s) for gal_dist(s) {biases}')
-    print(f'msd(s) for gal_dist(s) {bsd}')
+
+    filename = 'pair_sim_out'
+    with open('%s.txt' % filename, 'w') as f:
+        f.write(f"m: {biases}\n\nmsd: {bsd}\n\nratios: {ratios}\n\nobjDet: {objDet}") 
