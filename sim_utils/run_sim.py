@@ -168,6 +168,7 @@ def _run_sim(seed):
             flush=True)
     return retvals
 
+
 if rank == 0:
     if DO_METACAL_MOF:
         print('running metacal+MOF', flush=True)
