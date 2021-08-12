@@ -199,7 +199,7 @@ pres, mres = cut_nones(pres, mres)
 
 if rank == 0:
     dt = [('g1p', 'f8'), ('g1m', 'f8'), ('g1', 'f8'),
-        ('g2p', 'f8'), ('g2m', 'f8'), ('g2', 'f8')]
+          ('g2p', 'f8'), ('g2m', 'f8'), ('g2', 'f8')]
     dplus = np.array(pres, dtype=dt)
     dminus = np.array(mres, dtype=dt)
     with fitsio.FITS('data.fits', 'rw') as fits:
