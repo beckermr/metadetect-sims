@@ -54,6 +54,8 @@ class Sim(object):
         The simulated shear for the 2-axis.
     half_light_radius: float, optional
         The half light radius of the simulated objects.
+    sersic: float, optional
+        The Sersic index used to create exp type galaxies. 
     dim : int, optional
         The total dimension of the image.
     buff : int, optional
@@ -158,6 +160,7 @@ class Sim(object):
             n_coadd_msk=1,
             g1=0.02, g2=0.0,
             half_light_radius=0.5,
+            sersic=1,
             dim=225, buff=25,
             noise=180,
             ngal=45.0,
@@ -183,6 +186,7 @@ class Sim(object):
         self.g1 = g1
         self.g2 = g2
         self.half_light_radius = half_light_radius
+        self.sersic = sersic
         self.shear_scene = shear_scene
         self.dim = dim
         self.buff = buff
@@ -555,7 +559,7 @@ class Sim(object):
         for _ in range(self.n_bands):
             obj = galsim.Sersic(
                 half_light_radius=half_light_radius,
-                n=1,
+                n=self.sersic,
             ).withFlux(flux)
             _gal.append(obj)
 

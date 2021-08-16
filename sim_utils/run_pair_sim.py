@@ -7,6 +7,7 @@ import multiprocessing
 import logging
 import time
 import fitsio
+import pandas as pd
 
 import csv
 from functools import partial
@@ -30,7 +31,7 @@ from run_preamble import get_shear_meas_config
 
 biases = []
 bsd = []
-distances = np.linspace(1,5,num=2)
+distances = np.linspace(3,5,num=5)
 numObj = []
 objDet = []
 ratios = []
@@ -167,7 +168,6 @@ def _run_sim(seed, distance):
         mres = _meas_shear(md.result)
 
         numObj.append(len(md.result['noshear']))
-        f'TES TEST TET {numObj}'
         dens = len(md.result['noshear']) / sim.area_sqr_arcmin
         LOGGER.info('found %f objects per square arcminute', dens)
         
@@ -213,6 +213,10 @@ if __name__ == '__main__':
         pres, mres, nobs = zip(*outputs)
         pres, mres = cut_nones(pres, mres)
         nobs, nobs = cut_nones(nobs, nobs)
+        for i in range(len(nobs)):
+            nobs[i] = [value for value in nobs[i] if value != 3]      
+            nobs[i] = [value for value in nobs[i] if value != 4]
+
         if rank == 0:
             dt = [('g1p', 'f8'), ('g1m', 'f8'), ('g1', 'f8'),
                 ('g2p', 'f8'), ('g2m', 'f8'), ('g2', 'f8')]
@@ -239,5 +243,6 @@ if __name__ == '__main__':
         bsd.append(msd)
 
     filename = 'pair_sim_out'
-    with open('%s.txt' % filename, 'w') as f:
-        f.write(f"m: {biases}\n\nmsd: {bsd}\n\nratios: {ratios}\n\nobjDet: {objDet}") 
+    out = pd.DataFrame(list(zip(biases, bsd, ratios, distances)),
+               columns =['m', 'msd', 'ratios', 'distances'])
+    out.to_csv(filename + '.csv')
