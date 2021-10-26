@@ -42,7 +42,7 @@ jobs:
             meds \
             pylbfgs \
             lsstdesc-weaklensingdeblending \
-            "metadetect=0.3.10"
+            "metadetect==0.3.9"
 
           pip install git+https://github.com/esheldon/mof.git \
             --force-reinstall --no-deps --no-cache-dir
