@@ -275,3 +275,25 @@ def measure_shear_metacal_plus_mof(res, *, s2n_cut, t_ratio_cut):
     return (
         np.mean(g1p), np.mean(g1m), np.mean(g1),
         np.mean(g2p), np.mean(g2m), np.mean(g2))
+
+def obj_ratio(dets):
+    """Calculate the ratio of one ojbect detected versus anything not one.
+    
+    Parameters
+    ----------
+    dets : list of lists
+        The list of how many ojbects were detected.
+        
+    Returns
+    -------
+    ratio : float
+        The ratio of when one object was detected versus something else.
+    """
+    ones = 0
+    twos = 0
+    for i in range(len(dets)):
+        chunks = dets[i]
+        ones += chunks.count(1)
+        twos += chunks.count(2)
+    ratio = twos/(twos + ones)
+    return ratio

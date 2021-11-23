@@ -52,6 +52,10 @@ class Sim(object):
         The simulated shear for the 1-axis.
     g2 : float, optional
         The simulated shear for the 2-axis.
+    half_light_radius: float, optional
+        The half light radius of the simulated objects.
+    sersic: float, optional
+        The Sersic index used to create exp type galaxies. 
     dim : int, optional
         The total dimension of the image.
     buff : int, optional
@@ -65,6 +69,8 @@ class Sim(object):
     gal_grid : int or None
         If not `None`, galaxies are laid out on a grid of `gal_grid` x
         `gal_grid` dimensions in the central part of the image.
+    'gal_dist' : float
+        Distance in arcseconds between the generated object centers.
     psf_kws : dict or None, optional
         Extra keyword arguments to pass to the constructors for PSF objects.
         See the doc strings of the PSF objects `PowerSpectrumPSF` and `RealPSF`
@@ -86,7 +92,7 @@ class Sim(object):
 
             'min_dist' : float
                 Minimum distance in arcseconds between the generatd object
-                centers.
+                centers.             
 
     homogenize_psf : bool, optional
         Apply PSF homogenization to the image.
@@ -99,6 +105,9 @@ class Sim(object):
     add_cosmic_rays : bool, optional
         If False, do not add cosmic rays. Otherwise they will be added when
         `mask_and_interp` is True.
+    pair_sim : bool, optional
+        If True, Sim will create two galaxies at a distance gal_dist apart,
+        centered at the center of the image, and with a random rotation.
     bad_columns_kws : dict, optional
         A set of keyword arguments to pass to the bad column generator.
     interpolation_type : str, optional
@@ -150,17 +159,21 @@ class Sim(object):
             n_coadd_psf=None,
             n_coadd_msk=1,
             g1=0.02, g2=0.0,
+            half_light_radius=0.5,
+            sersic=1,
             dim=225, buff=25,
             noise=180,
             ngal=45.0,
             n_bands=1,
             gal_grid=None,
+            gal_dist=10, 
             psf_kws=None,
             gal_kws=None,
             homogenize_psf=False,
             mask_and_interp=False,
             add_bad_columns=True,
             add_cosmic_rays=True,
+            pair_sim=False,
             bad_columns_kws=None,
             interpolation_type='cubic',
             ngal_factor=None):
@@ -172,6 +185,8 @@ class Sim(object):
         self.n_coadd_msk = n_coadd_msk
         self.g1 = g1
         self.g2 = g2
+        self.half_light_radius = half_light_radius
+        self.sersic = sersic
         self.shear_scene = shear_scene
         self.dim = dim
         self.buff = buff
@@ -182,6 +197,7 @@ class Sim(object):
         self.ngal = ngal
         self.gal_grid = gal_grid
         self.im_cen = (dim - 1) / 2
+        self.gal_dist = gal_dist
         self.psf_kws = psf_kws
         self.gal_kws = gal_kws
         self.n_coadd_psf = n_coadd_psf or self.n_coadd
@@ -189,6 +205,7 @@ class Sim(object):
         self.mask_and_interp = mask_and_interp
         self.add_bad_columns = add_bad_columns
         self.add_cosmic_rays = add_cosmic_rays
+        self.pair_sim = pair_sim
         self.bad_columns_kws = bad_columns_kws or {}
         self.interpolation_type = interpolation_type
 
@@ -218,7 +235,7 @@ class Sim(object):
         if self.ngal_factor is None:
             self.ngal_factor = 1
         LOGGER.info('ngal adjustment factor: %f', self.ngal_factor)
-
+       
         self.nobj = int(
             self.ngal * self.ngal_factor *
             (self.dim * self.scale / 60 * frac)**2)
@@ -249,7 +266,6 @@ class Sim(object):
         self._wldeblend_cat['pa_disk'] = self.rng.uniform(
             low=0.0, high=360.0, size=self._wldeblend_cat.size)
         self._wldeblend_cat['pa_bulge'] = self._wldeblend_cat['pa_disk']
-
         # set the survey name and exposure times
         if 'survey_name' not in gal_kws:
             survey_name = 'DES'
@@ -509,11 +525,15 @@ class Sim(object):
                 xind * dg + dg/2 - self.pos_width)
         else:
             while True:
-                dx, dy = self.rng.uniform(
-                    low=-self.pos_width,
-                    high=self.pos_width,
-                    size=2)
-
+                if self.pair_sim:
+                     rot = self.rng.uniform(np.pi, size=1)
+                     dx = (0.5)*self.gal_dist*np.cos(rot) + (self.rng.uniform(-1,1,size=1)*.263)
+                     dy = (0.5)*self.gal_dist*np.sin(rot) + (self.rng.uniform(-1,1,size=1)*.263)
+                else:
+                    dx, dy = self.rng.uniform(
+                         low=-self.pos_width,
+                         high=self.pos_width,
+                         size=2)
                 if others is not None:
                     tree = scipy.spatial.cKDTree(others)
                     d, _ = tree.query(np.array([dx, dy]))
@@ -525,20 +545,21 @@ class Sim(object):
             return dx, dy
 
     def _get_nobj(self):
-        if self.gal_grid is not None:
+        if self.pair_sim:
+            return self.nobj
+        elif self.gal_grid is not None:
             return self.nobj
         else:
             return self.rng.poisson(self.nobj)
-
     def _get_gal_exp(self):
         flux = 10**(0.4 * (30 - 18))
-        half_light_radius = 0.5
+        half_light_radius = self.half_light_radius
 
         _gal = []
         for _ in range(self.n_bands):
             obj = galsim.Sersic(
                 half_light_radius=half_light_radius,
-                n=1,
+                n=self.sersic,
             ).withFlux(flux)
             _gal.append(obj)
 
@@ -588,7 +609,6 @@ class Sim(object):
         positions = []
 
         nobj = self._get_nobj()
-
         if self.gal_grid is not None:
             self._gal_grid_ind = 0
 
@@ -597,20 +617,27 @@ class Sim(object):
             LOGGER.debug('using min dist: %f', gal_kws['min_dist'])
             others = []
 
-        for i in range(nobj):
-            # unsheared offset from center of image
-            if 'min_dist' in gal_kws:
-                if i == 0:
-                    dx, dy = self._get_dxdy()
-                else:
-                    dx, dy = self._get_dxdy(
-                        others=np.array(others),
-                        min_dist=gal_kws['min_dist'])
-                others.append([dx, dy])
-            else:
-                dx, dy = self._get_dxdy()
+        dx, dy = self._get_dxdy()
 
-            # get the galaxy
+        for i in range(nobj):
+            if self.pair_sim: 
+                if i != 0:
+                    dx *= -1
+                    dy *= -1
+            else:
+                # unsheared offset from center of image
+                if 'min_dist' in gal_kws:
+                    if i == 0:
+                        dx, dy = self._get_dxdy()
+                    else:
+                         dx, dy = self._get_dxdy(
+                             others=np.array(others),
+                             min_dist=gal_kws['min_dist'])
+                    others.append([dx, dy])
+                else:
+                     dx, dy = self._get_dxdy()
+                # changed
+                # get the galaxy
             if self.gal_type == 'exp':
                 gals = self._get_gal_exp()
             elif self.gal_type == 'ground_galsim_parametric':
