@@ -20,157 +20,157 @@ from config import CONFIG
 from run_preamble import get_shear_meas_config
 
 
-if __name__ == "__main__":
-    (SWAP12, CUT_INTERP, DO_METACAL_MOF, DO_METACAL_SEP,
-     DO_METACAL_TRUEDETECT,
-     SHEAR_MEAS_CONFIG, SIM_CLASS) = get_shear_meas_config()
+(SWAP12, CUT_INTERP, DO_METACAL_MOF, DO_METACAL_SEP,
+ DO_METACAL_TRUEDETECT,
+ SHEAR_MEAS_CONFIG, SIM_CLASS) = get_shear_meas_config()
 
-    # process CLI arguments
-    n_sims = int(sys.argv[1])
+# process CLI arguments
+n_sims = int(sys.argv[1])
 
-    # logging
-    if n_sims == 1:
-        for lib in [__name__, 'ngmix', 'metadetect', 'mdetsims']:
-            lgr = logging.getLogger(lib)
-            hdr = logging.StreamHandler(sys.stdout)
-            hdr.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
-            lgr.setLevel(logging.DEBUG)
-            lgr.addHandler(hdr)
+# logging
+if n_sims == 1:
+    for lib in [__name__, 'ngmix', 'metadetect', 'mdetsims']:
+        lgr = logging.getLogger(lib)
+        hdr = logging.StreamHandler(sys.stdout)
+        hdr.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+        lgr.setLevel(logging.DEBUG)
+        lgr.addHandler(hdr)
 
-    LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
-    START = time.time()
+START = time.time()
 
-    # deal with MPI
+# deal with MPI
+try:
+    if n_sims > 1:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        n_ranks = comm.Get_size()
+        HAVE_MPI = True
+    else:
+        raise Exception()  # punt to the except clause
+except Exception:
+    n_ranks = 1
+    rank = 0
+    comm = None
+    HAVE_MPI = False
+
+if HAVE_MPI and n_ranks > 1:
+    n_workers = n_ranks if n_sims > 1 else 1
+else:
+    n_workers = multiprocessing.cpu_count() if n_sims > 1 else 1
+
+USE_MPI = HAVE_MPI and n_ranks > 1
+
+# code to do computation
+if DO_METACAL_MOF or DO_METACAL_TRUEDETECT or DO_METACAL_SEP:
+    def _meas_shear(res):
+        return measure_shear_metacal_plus_mof(
+            res, s2n_cut=10, t_ratio_cut=0.5)
+else:
+    def _meas_shear(res):
+        return measure_shear_metadetect(
+            res, s2n_cut=10, t_ratio_cut=1.2, cut_interp=CUT_INTERP)
+
+
+def _add_shears(cfg, plus=True):
+    g1 = 0.02
+    g2 = 0.0
+
+    if not plus:
+        g1 *= -1
+
+    if SWAP12:
+        g1, g2 = g2, g1
+
+    cfg.update({'g1': g1, 'g2': g2})
+
+
+def _run_sim(seed):
+    config = {}
+    config.update(SHEAR_MEAS_CONFIG)
+
     try:
-        if n_sims > 1:
-            from mpi4py import MPI
-            comm = MPI.COMM_WORLD
-            rank = comm.Get_rank()
-            n_ranks = comm.Get_size()
-            HAVE_MPI = True
-        else:
-            raise Exception()  # punt to the except clause
-    except Exception:
-        n_ranks = 1
-        rank = 0
-        comm = None
-        HAVE_MPI = False
-
-    if HAVE_MPI and n_ranks > 1:
-        n_workers = n_ranks if n_sims > 1 else 1
-    else:
-        n_workers = multiprocessing.cpu_count() if n_sims > 1 else 1
-
-    USE_MPI = HAVE_MPI and n_ranks > 1
-
-    # code to do computation
-    if DO_METACAL_MOF or DO_METACAL_TRUEDETECT or DO_METACAL_SEP:
-        def _meas_shear(res):
-            return measure_shear_metacal_plus_mof(
-                res, s2n_cut=10, t_ratio_cut=0.5)
-    else:
-        def _meas_shear(res):
-            return measure_shear_metadetect(
-                res, s2n_cut=10, t_ratio_cut=1.2, cut_interp=CUT_INTERP)
-
-
-    def _add_shears(cfg, plus=True):
-        g1 = 0.02
-        g2 = 0.0
-
-        if not plus:
-            g1 *= -1
-
+        # pos shear
+        rng = np.random.RandomState(seed=seed + 1000000)
+        _add_shears(CONFIG, plus=True)
         if SWAP12:
-            g1, g2 = g2, g1
+            assert CONFIG['g1'] == 0.0
+            assert CONFIG['g2'] == 0.02
+        else:
+            assert CONFIG['g1'] == 0.02
+            assert CONFIG['g2'] == 0.0
+        sim = SIM_CLASS(rng=rng, **CONFIG)
 
-        cfg.update({'g1': g1, 'g2': g2})
+        if DO_METACAL_MOF:
+            mbobs = sim.get_mbobs()
+            md = MetacalPlusMOF(config, mbobs, rng)
+            md.go()
+        elif DO_METACAL_SEP:
+            mbobs = sim.get_mbobs()
+            md = MetacalSepDetect(config, mbobs, rng)
+            md.go()
+        elif DO_METACAL_TRUEDETECT:
+            mbobs, tcat = sim.get_mbobs(return_truth_cat=True)
+            md = MetacalTrueDetect(config, mbobs, rng, tcat)
+            md.go()
+        else:
+            mbobs = sim.get_mbobs()
+            md = Metadetect(config, mbobs, rng)
+            md.go()
 
+        pres = _meas_shear(md.result)
 
-    def _run_sim(seed):
-        config = {}
-        config.update(SHEAR_MEAS_CONFIG)
+        dens = len(md.result['noshear']) / sim.area_sqr_arcmin
+        LOGGER.info('found %f objects per square arcminute', dens)
 
-        try:
-            # pos shear
-            rng = np.random.RandomState(seed=seed + 1000000)
-            _add_shears(CONFIG, plus=True)
-            if SWAP12:
-                assert CONFIG['g1'] == 0.0
-                assert CONFIG['g2'] == 0.02
-            else:
-                assert CONFIG['g1'] == 0.02
-                assert CONFIG['g2'] == 0.0
-            sim = SIM_CLASS(rng=rng, **CONFIG)
+        # neg shear
+        rng = np.random.RandomState(seed=seed + 1000000)
+        _add_shears(CONFIG, plus=False)
+        if SWAP12:
+            assert CONFIG['g1'] == 0.0
+            assert CONFIG['g2'] == -0.02
+        else:
+            assert CONFIG['g1'] == -0.02
+            assert CONFIG['g2'] == 0.0
+        sim = SIM_CLASS(rng=rng, **CONFIG)
 
-            if DO_METACAL_MOF:
-                mbobs = sim.get_mbobs()
-                md = MetacalPlusMOF(config, mbobs, rng)
-                md.go()
-            elif DO_METACAL_SEP:
-                mbobs = sim.get_mbobs()
-                md = MetacalSepDetect(config, mbobs, rng)
-                md.go()
-            elif DO_METACAL_TRUEDETECT:
-                mbobs, tcat = sim.get_mbobs(return_truth_cat=True)
-                md = MetacalTrueDetect(config, mbobs, rng, tcat)
-                md.go()
-            else:
-                mbobs = sim.get_mbobs()
-                md = Metadetect(config, mbobs, rng)
-                md.go()
+        if DO_METACAL_MOF:
+            mbobs = sim.get_mbobs()
+            md = MetacalPlusMOF(config, mbobs, rng)
+            md.go()
+        elif DO_METACAL_SEP:
+            mbobs = sim.get_mbobs()
+            md = MetacalSepDetect(config, mbobs, rng)
+            md.go()
+        elif DO_METACAL_TRUEDETECT:
+            mbobs, tcat = sim.get_mbobs(return_truth_cat=True)
+            md = MetacalTrueDetect(config, mbobs, rng, tcat)
+            md.go()
+        else:
+            mbobs = sim.get_mbobs()
+            md = Metadetect(config, mbobs, rng)
+            md.go()
 
-            pres = _meas_shear(md.result)
+        mres = _meas_shear(md.result)
 
-            dens = len(md.result['noshear']) / sim.area_sqr_arcmin
-            LOGGER.info('found %f objects per square arcminute', dens)
+        dens = len(md.result['noshear']) / sim.area_sqr_arcmin
+        LOGGER.info('found %f objects per square arcminute', dens)
 
-            # neg shear
-            rng = np.random.RandomState(seed=seed + 1000000)
-            _add_shears(CONFIG, plus=False)
-            if SWAP12:
-                assert CONFIG['g1'] == 0.0
-                assert CONFIG['g2'] == -0.02
-            else:
-                assert CONFIG['g1'] == -0.02
-                assert CONFIG['g2'] == 0.0
-            sim = SIM_CLASS(rng=rng, **CONFIG)
+        retvals = (pres, mres)
+    except Exception as e:
+        print(repr(e))
+        retvals = (None, None)
 
-            if DO_METACAL_MOF:
-                mbobs = sim.get_mbobs()
-                md = MetacalPlusMOF(config, mbobs, rng)
-                md.go()
-            elif DO_METACAL_SEP:
-                mbobs = sim.get_mbobs()
-                md = MetacalSepDetect(config, mbobs, rng)
-                md.go()
-            elif DO_METACAL_TRUEDETECT:
-                mbobs, tcat = sim.get_mbobs(return_truth_cat=True)
-                md = MetacalTrueDetect(config, mbobs, rng, tcat)
-                md.go()
-            else:
-                mbobs = sim.get_mbobs()
-                md = Metadetect(config, mbobs, rng)
-                md.go()
-
-            mres = _meas_shear(md.result)
-
-            dens = len(md.result['noshear']) / sim.area_sqr_arcmin
-            LOGGER.info('found %f objects per square arcminute', dens)
-
-            retvals = (pres, mres)
-        except Exception as e:
-            print(repr(e))
-            retvals = (None, None)
-
-        if USE_MPI and seed % 1000 == 0:
-            print(
-                "[% 10ds] %04d: %d" % (time.time() - START, rank, seed),
-                flush=True)
-        return retvals
+    if USE_MPI and seed % 1000 == 0:
+        print(
+            "[% 10ds] %04d: %d" % (time.time() - START, rank, seed),
+            flush=True)
+    return retvals
 
 
+if __name__ == "__main__":
     if rank == 0:
         if DO_METACAL_MOF:
             print('running metacal+MOF', flush=True)
