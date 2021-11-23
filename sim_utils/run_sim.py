@@ -213,10 +213,10 @@ if __name__ == "__main__":
 
         print("""\
     # of sims: {n_sims}
-    noise cancel m   : {m:f} +/- {msd:f}
-    noise cancel c   : {c:f} +/- {csd:f}""".format(
+    noise cancel m [1e-3, 3-sigma]  : {m:f} +/- {msd:f}
+    noise cancel c [1e-5, 3-sigma]  : {c:f} +/- {csd:f}""".format(
             n_sims=len(pres),
-            m=m,
-            msd=msd,
-            c=c,
-            csd=csd), flush=True)
+            m=m/1e-3,
+            msd=msd*3/1e-3,
+            c=c/1e-5,
+            csd=csd*3/1e-5), flush=True)
