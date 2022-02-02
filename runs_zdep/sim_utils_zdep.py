@@ -30,8 +30,6 @@ class Sim(object):
 
     Parameters
     ----------
-    OneSq_cat: fits file or None
-        The whole redshift info for OneSq_cat
     frac_ex : float, 0 to 1
         The fraction of galxies with extra shear.
     rng : np.random.RandomState
@@ -152,7 +150,7 @@ class Sim(object):
             cubic model for size variation
     """
     def __init__(
-            self, *, OneSq_cat=None,
+            self, *,
             frac_ex=0, rng, sel_rng,
             gal_type, psf_type, scale,
             shear_scene=True,
@@ -176,7 +174,6 @@ class Sim(object):
             interpolation_type='cubic',
             ngal_factor=None):
         self.rng = rng
-        self.OneSq_cat = OneSq_cat
         self.sel_rng = sel_rng
         self.frac_ex = frac_ex
         if self.frac_ex == 0:
@@ -366,16 +363,20 @@ class Sim(object):
         -------
         mbobs : MultiBandObsList
         """
-
-        all_band_obj, positions, z_population = self._get_band_objects()
-        truth_cat = np.zeros(len(positions), dtype=[('x', 'f8'), ('y', 'f8'),
-                                                    ('z_population', 'f8')])
-        truth_cat['z_population'] = z_population
+        if self.gal_type == 'wldeblend':
+            all_band_obj, positions, z_population, One_deg = self._get_band_objects()
+            truth_cat = np.zeros(len(positions), dtype=[('x', 'f8'), ('y', 'f8'),('z', 'f8')])
+            truth_cat['z'] = One_deg
+        else:
+            all_band_obj, positions, z_population = self._get_band_objects()
+            truth_cat = np.zeros(len(positions), dtype=[('x', 'f8'), ('y', 'f8'),('z_population', 'f8')])
+            truth_cat['z_population'] = z_population
 
         _, _, _, _, method = self._render_psf_image(
             x=self.im_cen, y=self.im_cen)
 
         mbobs = ngmix.MultiBandObsList()
+
 
         for band in range(self.n_bands):
 
@@ -594,7 +595,7 @@ class Sim(object):
                     angle * galsim.degrees)
             for band in range(len(self._builders))]
 
-        return gals, rind
+        return gals,rind
 
     def _get_band_objects(self):
         """Get a list of effective PSF-convolved galsim images w/ their
@@ -613,11 +614,10 @@ class Sim(object):
         nobj = self._get_nobj()
 
         # turn on/off varying shear
-        if self.gal_type == 'wldeblend':
-            z_population = np.zeros(nobj)
-        else:
-            z_population = self.sel_rng.choice(2, nobj, p=[self.frac_ex,
-                                                           1-self.frac_ex])
+        z_population = self.sel_rng.choice(2, nobj, p=[self.frac_ex, 1-self.frac_ex])
+
+        # for wldeblend galaxies, match to the one square catalog
+        One_deg = []
 
         if self.gal_grid is not None:
             self._gal_grid_ind = 0
@@ -646,21 +646,10 @@ class Sim(object):
             elif self.gal_type == 'ground_galsim_parametric':
                 gals = self._get_gal_ground_galsim_parametric()
             elif self.gal_type == 'wldeblend':
-                gals, rind = self._get_gal_wldeblend()
+                gals,rind = self._get_gal_wldeblend()
 
-                # add shear info to calculate the final position
-                if 0. < self.OneSq_cat[rind] < 0.2:
-                    z_population[i] = 0
-                elif 0.2 < self.OneSq_cat[rind] < 0.4:
-                    z_population[i] = 1
-                elif 0.4 < self.OneSq_cat[rind] < 0.6:
-                    z_population[i] = 2
-                elif 0.6 < self.OneSq_cat[rind] < 0.8:
-                    z_population[i] = 3
-                elif 0.8 < self.OneSq_cat[rind] < 1.0:
-                    z_population[i] = 4
-                else:
-                    z_population[i] = -1
+                # record the corresponding galaxy in OneDegSq catalog
+                One_deg.append(rind)
             else:
                 raise ValueError('gal_type "%s" not valid!' % self.gal_type)
 
@@ -700,8 +689,11 @@ class Sim(object):
 
             all_band_obj.append(_obj)
             positions.append(pos)
-
-        return all_band_obj, positions, z_population
+        
+        if self.gal_type == 'wldeblend':
+            return all_band_obj, positions, z_population, One_deg
+        else:
+            return all_band_obj, positions, z_population
 
     def _get_psf_box_size(self, psfs, _psf_wcs):
         if not hasattr(self, '_cached_psf_box_size'):
